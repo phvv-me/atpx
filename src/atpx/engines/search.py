@@ -1,3 +1,4 @@
+import asyncio
 import json
 import shutil
 import xml.etree.ElementTree as ElementTree
@@ -8,9 +9,9 @@ from typing import ClassVar
 from urllib.parse import quote
 
 import httpx
-from plumbum import local
 
 from .. import NAME
+from ..runtime import drive
 from .base import Capability, Engine
 
 TIMEOUT = 10.0
@@ -23,15 +24,46 @@ class SearchError(RuntimeError):
     """Raised when a search source fails or returns a response atpx cannot read."""
 
 
-class VaultEngine(Engine):
+class SearchEngine(Engine, ABC):
+    """The I/O bound side of the registry, async sources under the sync Engine surface.
+
+    A search source's real implementation is the async `fetch`. The `recall`
+    verb awaits `search`, the guarded entry, on every source inside one event
+    loop, while the inherited sync `Engine.run` path keeps working through
+    `execute`, which drives `fetch` on a fresh loop. Compute engines never
+    see any of this and the `Engine` contract stays synchronous. Abstract, so
+    it never enrolls in the registry itself.
+    """
+
+    capability: ClassVar[Capability] = Capability.SEARCH
+
+    def version(self) -> str:
+        """This tool's own version, since it shapes the hits."""
+        return package_version(NAME)
+
+    @abstractmethod
+    async def fetch(self, payload: str) -> str:
+        """Run one search asynchronously, returning the hits as a JSON array string."""
+
+    async def search(self, payload: str) -> str:
+        """Guarded async entry, refusing hosts where this source is unavailable."""
+        self.ensure_available()
+        return await self.fetch(payload)
+
+    def execute(self, payload: str) -> str:
+        """Sync facade over `fetch`, keeping the registry contract uniform."""
+        return drive(self.fetch(payload))
+
+
+class VaultEngine(SearchEngine):
     """Lexical search over the Zettelkasten through qmd inside the chefe env.
 
-    Runs `chefe run qmd -- search -c zettel --json` from the workspace root, the
-    no-LLM BM25 surface, so recall never waits on a local model download.
+    Runs `chefe run qmd -- search -c zettel --json` from the workspace root as
+    an asyncio subprocess, the no-LLM BM25 surface, so recall never waits on a
+    local model download.
     """
 
     name = "vault"
-    capability: ClassVar[Capability] = Capability.SEARCH
 
     def __init__(self, cwd: Path | None = None) -> None:
         """cwd: where chefe runs from, defaulting to the current directory."""
@@ -42,19 +74,24 @@ class VaultEngine(Engine):
         return shutil.which("chefe") is not None
 
     def resolved(self) -> str:
-        """The chefe binary's current PATH location, dodging plumbum's lookup cache."""
+        """The chefe binary's current PATH location, honoring PATH changes at call time."""
         return shutil.which("chefe") or "chefe"
 
-    def version(self) -> str:
-        """This tool's own version, since it shapes the hits."""
-        return package_version(NAME)
-
-    def execute(self, payload: str) -> str:
+    async def fetch(self, payload: str) -> str:
         """Search the zettel collection, returning the hits as a JSON array string."""
         argv = ["run", "qmd", "--", "search", "-c", "zettel", "--json", payload]
-        code, stdout, stderr = local[self.resolved()][argv].run(retcode=None, cwd=str(self.cwd))
-        if code != 0:
-            raise SearchError(f"{self.name}: qmd exited {code}: {stderr.strip()[-500:]}")
+        process = await asyncio.create_subprocess_exec(
+            self.resolved(),
+            *argv,
+            cwd=self.cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            raise SearchError(
+                f"{self.name}: qmd exited {process.returncode}: {stderr.decode().strip()[-500:]}"
+            )
         try:
             entries = json.loads(stdout)
         except json.JSONDecodeError as error:
@@ -71,23 +108,17 @@ class VaultEngine(Engine):
         return json.dumps(hits)
 
 
-class NetworkSearchEngine(Engine, ABC):
-    """Shared HTTP plumbing for the read-only web search sources.
+class NetworkSearchEngine(SearchEngine, ABC):
+    """Shared async HTTP plumbing for the read-only web search sources.
 
     Abstract, so it never enrolls in the registry itself. Availability is EAFP:
     these engines always report available and surface network or shape failures
     at run time as `SearchError`, which `recall` turns into a nonzero certificate.
     """
 
-    capability: ClassVar[Capability] = Capability.SEARCH
-
     def available(self) -> bool:
         """Always true; reachability is settled by the request itself."""
         return True
-
-    def version(self) -> str:
-        """This tool's own version, since it shapes the hits."""
-        return package_version(NAME)
 
     @abstractmethod
     def endpoint(self, query: str) -> str:
@@ -97,10 +128,11 @@ class NetworkSearchEngine(Engine, ABC):
     def hits(self, response: httpx.Response) -> list[Hit]:
         """Shape a successful response into hit records."""
 
-    def execute(self, payload: str) -> str:
+    async def fetch(self, payload: str) -> str:
         """Fetch and shape one search, returning the hits as a JSON array string."""
         try:
-            response = httpx.get(self.endpoint(payload), timeout=TIMEOUT, follow_redirects=True)
+            async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
+                response = await client.get(self.endpoint(payload))
             response.raise_for_status()
             return json.dumps(self.hits(response)[:LIMIT])
         except (httpx.HTTPError, ValueError, KeyError, ElementTree.ParseError) as error:

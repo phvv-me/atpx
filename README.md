@@ -23,7 +23,8 @@ naked results anywhere, no daemon, and no database, just three surfaces over one
 filesystem state.
 
 1. **Python API.** `atpx.workspace()` returns a `Workspace` whose methods are the verbs.
-2. **CLI.** `atpx <verb>` exposes the same methods through fire.
+2. **CLI.** `atpx <verb>` exposes the same methods through cyclopts, which owns the
+   event loop and runs the async verbs to completion.
 3. **Filesystem.** Blueprint directories hold per-host append-only evidence ledgers
    at `evidence/<hostname>.json`, and vault zettels carry node status.
 
@@ -52,7 +53,7 @@ atpx brief <slug>              # the full agent context bundle for one node, as 
 atpx judge_brief <slug>        # what changed since the last refuter judgment
 atpx status                    # nodes grouped by zettel status
 atpx graph                     # open nodes whose dependencies are all settled
-atpx recall '"<query>"'        # federated search, one certificate of hits per source
+atpx recall "<query>"          # federated search, one certificate of hits per source
 atpx connect <slug>            # OEIS lookups for integer runs in the node's evidence
 atpx strategies                # close-rates by strategy tag over the append-only logs
 atpx lean_candidates           # sketched nodes ranked for formalization
@@ -63,6 +64,12 @@ atpx prove "<goal>"            # try ATP engines in order, certify who closed it
 atpx cross_check <operation> <payload>   # same probe on independent engines
 ```
 
+Arguments are plain shell tokens under cyclopts, so a multi-word query needs
+only ordinary quoting, `atpx recall "Leech lattice"`, never the doubled
+quoting the old fire CLI required. Options follow their verb's signature
+(`--seed 7`, `--background`, `--sources oeis`), and `atpx --help` lists every
+verb with its parameters.
+
 Status transitions are enforced in code, not prose. Only a refuter sets
 `sketched` or `refuted` and only the formalizer sets `verified`.
 
@@ -70,9 +77,14 @@ Status transitions are enforced in code, not prose. Only a refuter sets
 import atpx
 
 ws = atpx.workspace()
-certificate = ws.check("voronoi-e8-codec", "bijectivity-m1")
-ws.cross_check("evaluate", "exp(pi*sqrt(163))")   # sympy vs mpmath, certified agreement
-ws.recall("196560, 16773120")   # the Leech theta series turns up OEIS A008408
+
+# the I/O verbs are async, so they compose on one event loop
+certificate = await ws.check("voronoi-e8-codec", "bijectivity-m1")
+await ws.recall("196560, 16773120")   # the Leech theta series turns up OEIS A008408
+
+# synchronous scripts and one-liners block on them through the sync facade
+ws.sync.recall("196560, 16773120")
+ws.cross_check("evaluate", "exp(pi*sqrt(163))")   # CPU-bound verbs stay plain sync
 ```
 
 A blueprint claim is either a bare command string or a table with `command` and
@@ -160,15 +172,33 @@ must break the tie deterministically. `rederive` runs over exact rationals
 through flint and reports integrality and the determinant of the basis-change
 matrix.
 
-## Free threading
+## Concurrency
 
-The parallel surfaces (`recall` sources, `cross_check` engines, the `verify`
-sweep) run on `ThreadPoolExecutor`, they are I/O and subprocess bound. Standard
-CPython 3.14 is the supported runtime; free-threaded 3.14t is currently
-**blocked by one dependency** and is not required for anything.
+atpx has no threads. The verbs with real I/O underneath are `async def` and
+compose on the caller's event loop. `recall` awaits every search source
+concurrently (`httpx.AsyncClient` for the web sources and an asyncio
+subprocess for the vault), `check` runs the claim command as an asyncio
+subprocess, `verify` re-runs claims with at most four in flight, and
+`connect` awaits `recall` per integer run. The purely local or CPU-bound
+verbs (`status`, `graph`, `brief`, `compute`, `prove`, `cross_check`, ...)
+stay plain sync; `cross_check` probes its in-process engines in a sequential
+loop on purpose, since there is no I/O for a loop to overlap.
 
-The table below was measured on `cpython-3.14.3+freethreaded` (macOS arm64,
-uv-managed, 2026-06).
+The CLI never exposes any of this, cyclopts owns the event loop and runs sync
+and async verbs alike. In Python, async code awaits the verbs directly and
+can fan them out with `asyncio.gather`; synchronous scripts use the
+`workspace().sync` facade, which drives one verb to completion on a fresh
+loop per call. Calling the facade from inside an already running loop fails
+with a clear error instead of a nested-loop crash, await the verb directly
+there.
+
+### Free threading (historical)
+
+Free-threaded CPython 3.14t was evaluated while these surfaces still ran on
+`ThreadPoolExecutor`. That question is now moot by design, since no
+shared-state parallelism remains anywhere in the package. The wheel matrix
+from the evaluation stays below as historical context. It was measured on
+`cpython-3.14.3+freethreaded` (macOS arm64, uv-managed, 2026-06).
 
 | dependency | free-threaded wheel | imports under `PYTHON_GIL=0` |
 | ------------- | ------------------- | ---------------------------- |
@@ -178,11 +208,11 @@ uv-managed, 2026-06).
 | cvc5 | **no** (through 1.3.4, `cp38`-`cp314` only) | n/a |
 | sympy, mpmath, httpx, fire, plumbum, patos | yes | yes |
 
-`uv pip install atpx` on 3.14t therefore fails to resolve because of cvc5.
-With cvc5 stubbed out for the experiment, 130 of the 132 tests pass under
-`PYTHON_GIL=0` (the two that exercise the real cvc5 solver cannot run), so the
-package itself is free-threading clean and the status flips to supported the
-moment cvc5 ships a `cp314t` wheel.
+At the time, `uv pip install atpx` on 3.14t failed to resolve because of
+cvc5, while with cvc5 stubbed out 130 of the 132 tests passed under
+`PYTHON_GIL=0`. The package was already free-threading clean and the threads
+have since been removed entirely. Standard CPython 3.14 is the supported
+runtime.
 
 ## Engines
 

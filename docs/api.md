@@ -11,26 +11,30 @@ ws = atpx.workspace()          # discover the workspace root from the cwd
 ```
 
 Every verb below is a `Workspace` method and an `atpx` CLI command, and every
-one returns an `atpx.Certificate`, never a naked result.
+one returns an `atpx.Certificate`, never a naked result. The verbs marked
+async are `async def`, awaited directly in async code; the CLI runs them on
+its own event loop through cyclopts, and synchronous scripts block on them
+through the `ws.sync` facade (`ws.sync.check(...)`, `ws.sync.verify(...)`,
+`ws.sync.recall(...)`, `ws.sync.connect(...)`).
 
-| verb | what it certifies |
-|---|---|
-| `check(slug, claim, background=False)` | one blueprint claim run, persisted to the evidence ledger; `background=True` detaches it |
-| `checks(slug)` | background submissions, pending or landed (plain list, read only) |
-| `verify(slug=None)` | the freshness sweep, fresh, failed, or skipped per claim plus stale flags |
-| `brief(slug)` | the full agent context bundle for one node (markdown, read only) |
-| `judge_brief(slug)` | what changed since the last refuter judgment (markdown, read only) |
-| `status()` | nodes grouped by zettel status (plain dict, read only) |
-| `graph()` | the dependency frontier (plain list, read only) |
-| `recall(query, sources=None)` | federated search hits per source |
-| `connect(slug)` | OEIS matches for integer runs in the node's evidence |
-| `strategies()` | close-rates by strategy tag (markdown table, read only) |
-| `lean_candidates()` | sketched nodes ranked for formalization (markdown table, read only) |
-| `log(zettel, role, tag, message, status=None)` | one role-gated journal line |
-| `index(write=False)` | the regenerated results index note |
-| `compute(engine, operation, payload)` | one typed engine operation |
-| `prove(goal, syntax=None)` | which ATP engine closed the goal |
-| `cross_check(operation, payload, engines=None)` | agreement of independent engines |
+| verb | mode | what it certifies |
+|---|---|---|
+| `check(slug, claim, background=False)` | async | one blueprint claim run, persisted to the evidence ledger; `background=True` detaches it |
+| `checks(slug)` | sync | background submissions, pending or landed (plain list, read only) |
+| `verify(slug=None)` | async | the freshness sweep, fresh, failed, or skipped per claim plus stale flags |
+| `brief(slug)` | sync | the full agent context bundle for one node (markdown, read only) |
+| `judge_brief(slug)` | sync | what changed since the last refuter judgment (markdown, read only) |
+| `status()` | sync | nodes grouped by zettel status (plain dict, read only) |
+| `graph()` | sync | the dependency frontier (plain list, read only) |
+| `recall(query, sources=None)` | async | federated search hits per source |
+| `connect(slug)` | async | OEIS matches for integer runs in the node's evidence |
+| `strategies()` | sync | close-rates by strategy tag (markdown table, read only) |
+| `lean_candidates()` | sync | sketched nodes ranked for formalization (markdown table, read only) |
+| `log(zettel, role, tag, message, status=None)` | sync | one role-gated journal line |
+| `index(write=False)` | sync | the regenerated results index note |
+| `compute(engine, operation, payload)` | sync | one typed engine operation |
+| `prove(goal, syntax=None)` | sync | which ATP engine closed the goal |
+| `cross_check(operation, payload, engines=None)` | sync | agreement of independent engines |
 
 The supporting types are `atpx.Certificate`, `atpx.Blueprint`, `atpx.Claim`,
 `atpx.EvidenceStore`, `atpx.Vault`, `atpx.Zettel`, `atpx.Role`,
@@ -40,6 +44,11 @@ The supporting types are `atpx.Certificate`, `atpx.Blueprint`, `atpx.Claim`,
 and `rederive`. Every self-reference derives from `atpx.NAME` and
 `atpx.CONFIG`, so renaming the package folder renames the tool, its CLI, and
 its manifest files.
+
+On the command line, arguments are plain shell tokens, so a multi-word query
+is just `atpx recall "Leech lattice"`, and command names keep their
+underscores (`cross_check`, `judge_brief`, `lean_candidates`). Certificates
+print as JSON, markdown verbs print their text as-is.
 
 ```sh
 atpx --help

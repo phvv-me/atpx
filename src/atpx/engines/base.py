@@ -62,6 +62,12 @@ class Engine(Registry, ABC):
     A concrete engine declares its import `module`, its installed `distribution`
     name, and the one `capability` it serves; stage 2 grows the vocabulary by
     adding engines and capabilities, never by editing this contract.
+
+    The layer stays deliberately minimal (availability, version, run and stamp,
+    cross-engine agreement) and grows no per-function typed wrappers, because atpx
+    certifies results and never proxies APIs, agents import sympy or flint or z3
+    directly in their own snippets. Zettel "Prova Proof Bookkeeping Package", the
+    no-proxy principle section.
     """
 
     name: ClassVar[str]
@@ -80,6 +86,11 @@ class Engine(Registry, ABC):
         except PackageNotFoundError:
             return "unknown"
 
+    def ensure_available(self) -> None:
+        """Refuse this engine on a host where it cannot run."""
+        if not self.available():
+            raise EngineUnavailableError(f"{self.name} is not available on this host")
+
     @abstractmethod
     def execute(self, payload: str) -> str:
         """Run this engine's capability on a payload, returning the raw result string."""
@@ -95,8 +106,7 @@ class Engine(Registry, ABC):
             raise UnsupportedOperationError(
                 f"{self.name} only does {self.capability.value}, not {requested.value}"
             )
-        if not self.available():
-            raise EngineUnavailableError(f"{self.name} is not available on this host")
+        self.ensure_available()
         return self.execute(payload)
 
     @classmethod

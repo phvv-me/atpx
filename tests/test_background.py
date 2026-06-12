@@ -37,7 +37,7 @@ def test_background_check_detaches_and_records_the_submission(
     ws: tuple[Workspace, FakeRunner], fake_chefe: Path
 ) -> None:
     space, runner = ws
-    certificate = space.check("demo", "ok", background=True)
+    certificate = space.sync.check("demo", "ok", background=True)
     assert runner.calls == []
     result = certificate.result
     assert isinstance(result, dict)
@@ -54,7 +54,7 @@ def test_background_check_validates_the_claim_before_detaching(
 ) -> None:
     space, _ = ws
     with pytest.raises(KeyError, match="known claims"):
-        space.check("demo", "missing", background=True)
+        space.sync.check("demo", "missing", background=True)
     assert not (space.blueprints / "demo" / "checks").exists()
 
 
@@ -62,7 +62,7 @@ def test_checks_reports_pending_then_landed(
     ws: tuple[Workspace, FakeRunner], fake_chefe: Path
 ) -> None:
     space, _ = ws
-    space.check("demo", "ok", background=True)
+    space.sync.check("demo", "ok", background=True)
     (pending,) = space.checks("demo")
     assert pending["claim"] == "ok" and pending["state"] == "pending"
     landed = stamped(claim="demo/ok").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
@@ -75,7 +75,7 @@ def test_checks_ignore_certificates_for_other_claims(
     ws: tuple[Workspace, FakeRunner], fake_chefe: Path
 ) -> None:
     space, _ = ws
-    space.check("demo", "ok", background=True)
+    space.sync.check("demo", "ok", background=True)
     other = stamped(claim="demo/gpu").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
     EvidenceStore(space.blueprints / "demo").append(other)
     (row,) = space.checks("demo")

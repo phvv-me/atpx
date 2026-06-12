@@ -1,13 +1,11 @@
+import asyncio
 import json
 import tomllib
-from concurrent.futures import ThreadPoolExecutor
 from datetime import date
-from functools import partial
 from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Protocol
 
-from plumbum import local
 from pydantic import JsonValue
 
 from . import CONFIG, NAME
@@ -20,22 +18,26 @@ from .engines import (
     Capability,
     Engine,
     EngineUnavailableError,
+    SearchEngine,
     SearchError,
+    UnsupportedOperationError,
     VaultEngine,
     normalized,
 )
 from .evidence import EvidenceStore
 from .index import ResultsIndex
 from .roles import Role, Status, authorize
+from .runtime import drive
 from .zettel import Vault
 
 CLOSING = {"smtlib": (Capability.SOLVE_SMT, "unsat"), "tptp": (Capability.PROVE_TPTP, "Theorem")}
+RERUN_LIMIT = 4
 
 
 class CommandRunner(Protocol):
     """How the check verb executes a claim command."""
 
-    def __call__(self, argv: list[str]) -> tuple[int, str]: ...
+    async def __call__(self, argv: list[str]) -> tuple[int, str]: ...
 
 
 class ChefeRunner:
@@ -45,10 +47,18 @@ class ChefeRunner:
         """root: the workspace root chefe runs from."""
         self.root = root
 
-    def __call__(self, argv: list[str]) -> tuple[int, str]:
+    async def __call__(self, argv: list[str]) -> tuple[int, str]:
         """Execute `chefe run <argv>` from the root and return (exit status, combined output)."""
-        code, stdout, stderr = local["chefe"]["run", *argv].run(retcode=None, cwd=str(self.root))
-        return code, stdout + stderr
+        process = await asyncio.create_subprocess_exec(
+            "chefe",
+            "run",
+            *argv,
+            cwd=self.root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await process.communicate()
+        return process.returncode or 0, stdout.decode()
 
 
 class CrossCheckError(RuntimeError):
@@ -78,7 +88,20 @@ class Workspace:
 
     The same methods back the Python API and the CLI; the third surface is the
     filesystem they read and write, blueprint directories with per-host evidence
-    ledgers plus the vault zettels that carry node status.
+    ledgers plus the vault zettels that carry node status. The verbs with real
+    I/O underneath (`check`, `verify`, `recall`, `connect`) are async and
+    compose on the caller's event loop; the CLI runs them through cyclopts,
+    which owns the loop, and synchronous scripts block on them through the
+    `sync` facade.
+
+    The verb set is governed by the no-proxy principle, the tool offers only what
+    an agent cannot already do well alone. Guardrails (append-only provenance,
+    role-gated transitions, deterministic index regeneration), accelerators for
+    measured friction (brief, judge_brief, graph, recall, the adversarial probes),
+    and corpus analytics needing the whole ledger and log history (strategies,
+    connect, lean_candidates). Any proposed verb an agent can replicate with one
+    library import and no evidence value gets rejected. Zettel "Prova Proof
+    Bookkeeping Package", the no-proxy principle section.
     """
 
     def __init__(self, root: Path, runner: CommandRunner | None = None) -> None:
@@ -95,7 +118,12 @@ class Workspace:
         )
         self.runner = runner or ChefeRunner(root)
 
-    def check(
+    @property
+    def sync(self) -> SyncVerbs:
+        """Blocking access to the async verbs, `workspace().sync.recall(...)`."""
+        return SyncVerbs(self)
+
+    async def check(
         self, slug: str, claim: str, seed: int | None = None, background: bool = False
     ) -> Certificate:
         """Run one blueprint claim, stamp a certificate, and persist it to evidence.
@@ -123,27 +151,20 @@ class Workspace:
                 engine_version=package_version(NAME),
                 root=self.root,
             )
-        certificate = self.attempt(blueprint, claim, seed)
+        certificate = await self.attempt(blueprint, claim, seed)
         EvidenceStore(blueprint.directory).append(certificate)
         return certificate
 
-    def attempt(self, blueprint: Blueprint, claim: str, seed: int | None = None) -> Certificate:
+    async def attempt(
+        self, blueprint: Blueprint, claim: str, seed: int | None = None
+    ) -> Certificate:
         """Run one claim command and stamp its certificate without persisting it.
 
         blueprint: the loaded claim manifest.
         claim: the claim name to run.
         seed: RNG seed to record when the claim script used one.
         """
-        exit_status, output = self.runner(blueprint.command(claim, self.root))
-        return Certificate.stamp(
-            claim=f"{blueprint.slug}/{claim}",
-            result=self.payload(output),
-            engine=NAME,
-            engine_version=package_version(NAME),
-            exit_status=exit_status,
-            seed=seed,
-            root=self.root,
-        )
+        return await attempted(self.runner, blueprint, claim, self.root, seed)
 
     def checks(self, slug: str) -> list[dict[str, str]]:
         """Background submissions for one blueprint, each pending or landed.
@@ -152,14 +173,15 @@ class Workspace:
         """
         return BackgroundChecks(Blueprint.load(self.blueprints / slug), self.root).listing()
 
-    def verify(self, slug: str | None = None) -> Certificate:
+    async def verify(self, slug: str | None = None) -> Certificate:
         """Freshness sweep: re-run every claim this host can run and flag stale evidence.
 
-        Claims run concurrently (they are subprocess bound) and the fresh
-        certificates land in the evidence ledger sequentially afterwards, keeping
-        the per-host file race free. A claim is stale when its latest prior
-        certificate was stamped at a different git revision than the tree now.
-        Nothing is ever deleted; a `requires`-gated claim this host cannot run is
+        Claims re-run concurrently as asyncio subprocesses, at most
+        `RERUN_LIMIT` in flight, and the fresh certificates land in the
+        evidence ledger sequentially afterwards, keeping the per-host file
+        race free. A claim is stale when its latest prior certificate was
+        stamped at a different git revision than the tree now. Nothing is
+        ever deleted; a `requires`-gated claim this host cannot run is
         reported skipped.
 
         slug: one blueprint to sweep, defaulting to every blueprint with a manifest.
@@ -178,9 +200,7 @@ class Workspace:
                 for claim, spec in blueprint.claims.items()
                 if not spec.requires or satisfied(spec.requires)
             ]
-            with ThreadPoolExecutor(max_workers=len(runnable) or 1) as pool:
-                certificates = pool.map(partial(self.attempt, blueprint), runnable)
-                fresh = dict(zip(runnable, certificates, strict=True))
+            fresh = await swept(self.runner, blueprint, runnable, self.root)
             store = EvidenceStore(blueprint.directory)
             for certificate in fresh.values():
                 store.append(certificate)
@@ -242,14 +262,15 @@ class Workspace:
         """The frontier: unsettled nodes whose wikilink dependencies are all settled."""
         return self.vault.frontier()
 
-    def recall(self, query: str, sources: list[str] | None = None) -> Certificate:
+    async def recall(self, query: str, sources: list[str] | None = None) -> Certificate:
         """Federated read-only search, one certificate listing the hits per source.
 
         Every engine with the `search` capability is asked unless `sources` names
-        a subset, and the sources run concurrently since they are I/O bound. A
-        source that is unavailable or fails at run time becomes an entry under
-        `errors` and the certificate exits nonzero, so a partial recall is never
-        mistaken for a complete one.
+        a subset, and the sources are awaited concurrently on the caller's
+        event loop since they are network and subprocess bound. A source that is
+        unavailable or fails at run time becomes an entry under `errors` and
+        the certificate exits nonzero, so a partial recall is never mistaken
+        for a complete one.
 
         query: the search text every source receives.
         sources: engine names to ask, defaulting to every search engine.
@@ -259,24 +280,8 @@ class Workspace:
             if sources
             else Engine.supporting(Capability.SEARCH)
         )
-        instances = [
-            VaultEngine(self.root) if engine is VaultEngine else engine() for engine in candidates
-        ]
-
-        def attempt(instance: Engine) -> tuple[str, JsonValue, str | None]:
-            try:
-                return instance.name, json.loads(instance.run(Capability.SEARCH, query)), None
-            except (SearchError, EngineUnavailableError) as error:
-                return instance.name, None, str(error)
-
-        hits: dict[str, JsonValue] = {}
-        errors: dict[str, JsonValue] = {}
-        with ThreadPoolExecutor(max_workers=len(instances) or 1) as pool:
-            for name, found, error in pool.map(attempt, instances):
-                if error is None:
-                    hits[name] = found
-                else:
-                    errors[name] = error
+        instances = [self.searcher(engine) for engine in candidates]
+        hits, errors = await recalled(instances, query)
         return Certificate.stamp(
             claim=f"recall {query}",
             result={"hits": hits, "errors": errors},
@@ -286,7 +291,18 @@ class Workspace:
             root=self.root,
         )
 
-    def connect(self, slug: str, minimum: int = 4, limit: int = 8) -> Certificate:
+    def searcher(self, engine: type[Engine]) -> SearchEngine:
+        """One ready search source, refusing engines without the search capability.
+
+        engine: the registered engine class to instantiate.
+        """
+        if not issubclass(engine, SearchEngine):
+            raise UnsupportedOperationError(
+                f"{engine.name} only does {engine.capability.value}, not {Capability.SEARCH.value}"
+            )
+        return VaultEngine(self.root) if engine is VaultEngine else engine()
+
+    async def connect(self, slug: str, minimum: int = 4, limit: int = 8) -> Certificate:
         """Fingerprint a node's evidence numerics against the OEIS, one certificate of matches.
 
         Integer runs of `minimum` or more values are extracted from every
@@ -309,9 +325,9 @@ class Workspace:
         results: dict[str, JsonValue] = {}
         clean = True
         for run in list(runs)[:limit]:
-            recalled = self.recall(", ".join(map(str, run)), sources=["oeis"])
-            results[recalled.claim.removeprefix("recall ")] = recalled.result
-            clean = clean and recalled.ok
+            found = await self.recall(", ".join(map(str, run)), sources=["oeis"])
+            results[found.claim.removeprefix("recall ")] = found.result
+            clean = clean and found.ok
         return Certificate.stamp(
             claim=f"connect {slug}",
             result=results,
@@ -425,7 +441,12 @@ class Workspace:
     def cross_check(
         self, operation: str, payload: str, engines: list[str] | None = None
     ) -> Certificate:
-        """Run the same probe on independent engines concurrently and certify agreement.
+        """Run the same probe on independent engines and certify agreement.
+
+        The probes run as a plain sequential loop on purpose. Every engine
+        here is an in-process CPU-bound library (sympy, mpmath, flint, z3,
+        cvc5), so there is no I/O for an event loop to overlap and threads
+        would only add shared-state hazards without speedup under the GIL.
 
         operation: the shared capability to probe.
         payload: the probe input every engine receives.
@@ -440,12 +461,7 @@ class Workspace:
             raise CrossCheckError(
                 f"cross-check needs at least two available engines for {capability.value}"
             )
-
-        def probe(instance: Engine) -> tuple[str, str]:
-            return instance.name, instance.run(capability, payload)
-
-        with ThreadPoolExecutor(max_workers=len(instances)) as pool:
-            results = dict(pool.map(probe, instances))
+        results = {instance.name: instance.run(capability, payload) for instance in instances}
         agree = len({normalized(capability, value) for value in results.values()}) == 1
         return Certificate.stamp(
             claim=f"{operation} {payload}",
@@ -456,7 +472,8 @@ class Workspace:
             root=self.root,
         )
 
-    def payload(self, output: str) -> JsonValue:
+    @staticmethod
+    def payload(output: str) -> JsonValue:
         """The structured result of a claim run, the last JSON object printed.
 
         Falls back to the tail of the raw output when the script printed no JSON.
@@ -479,3 +496,130 @@ class Workspace:
         if any(marker in goal for marker in ("fof(", "cnf(", "tff(", "thf(")):
             return "tptp"
         raise ValueError("cannot detect goal syntax, pass syntax='smtlib' or 'tptp'")
+
+
+class SyncVerbs:
+    """The async workspace verbs as plain blocking calls, for one-liner scripts.
+
+    `workspace().sync.recall("...")` drives the verb to completion on a fresh
+    event loop, so a single Python expression needs no asyncio boilerplate.
+    Code already inside a running loop should await the workspace verb
+    directly; there the facade refuses with `drive`'s clear nested-loop error.
+    """
+
+    def __init__(self, verbs: Workspace) -> None:
+        """verbs: the workspace whose async verbs this facade blocks on."""
+        self.verbs = verbs
+
+    def check(
+        self, slug: str, claim: str, seed: int | None = None, background: bool = False
+    ) -> Certificate:
+        """Blocking `Workspace.check`, one claim run stamped and persisted.
+
+        slug: the blueprint directory name under the blueprints root.
+        claim: the claim name declared in the blueprint manifest.
+        seed: RNG seed to record when the claim script used one.
+        background: detach the run instead of waiting for it.
+        """
+        return drive(self.verbs.check(slug, claim, seed, background))
+
+    def verify(self, slug: str | None = None) -> Certificate:
+        """Blocking `Workspace.verify`, the freshness sweep run to completion.
+
+        slug: one blueprint to sweep, defaulting to every blueprint with a manifest.
+        """
+        return drive(self.verbs.verify(slug))
+
+    def recall(self, query: str, sources: list[str] | None = None) -> Certificate:
+        """Blocking `Workspace.recall`, the federated search awaited to one certificate.
+
+        query: the search text every source receives.
+        sources: engine names to ask, defaulting to every search engine.
+        """
+        return drive(self.verbs.recall(query, sources))
+
+    def connect(self, slug: str, minimum: int = 4, limit: int = 8) -> Certificate:
+        """Blocking `Workspace.connect`, the OEIS fingerprinting run to completion.
+
+        slug: the blueprint directory name under the blueprints root.
+        minimum: shortest integer run worth fingerprinting.
+        limit: most sequences queried per call.
+        """
+        return drive(self.verbs.connect(slug, minimum, limit))
+
+
+async def attempted(
+    runner: CommandRunner, blueprint: Blueprint, claim: str, root: Path, seed: int | None = None
+) -> Certificate:
+    """Run one claim command through the runner and stamp its certificate.
+
+    The async internal under `Workspace.attempt` and the `verify` sweep, so a
+    single claim and a concurrent batch share one code path.
+
+    runner: the claim command executor.
+    blueprint: the loaded claim manifest.
+    claim: the claim name to run.
+    root: the workspace root commands run from.
+    seed: RNG seed to record when the claim script used one.
+    """
+    exit_status, output = await runner(blueprint.command(claim, root))
+    return Certificate.stamp(
+        claim=f"{blueprint.slug}/{claim}",
+        result=Workspace.payload(output),
+        engine=NAME,
+        engine_version=package_version(NAME),
+        exit_status=exit_status,
+        seed=seed,
+        root=root,
+    )
+
+
+async def swept(
+    runner: CommandRunner, blueprint: Blueprint, claims: list[str], root: Path
+) -> dict[str, Certificate]:
+    """Re-run claims as concurrent subprocesses, at most `RERUN_LIMIT` in flight.
+
+    The semaphore bounds the fan-out so a wide blueprint cannot fork dozens of
+    chefe environments at once.
+
+    runner: the claim command executor.
+    blueprint: the loaded claim manifest.
+    claims: the claim names this host can run.
+    root: the workspace root commands run from.
+    """
+    semaphore = asyncio.Semaphore(RERUN_LIMIT)
+
+    async def bounded(claim: str) -> Certificate:
+        async with semaphore:
+            return await attempted(runner, blueprint, claim, root)
+
+    certificates = await asyncio.gather(*(bounded(claim) for claim in claims))
+    return dict(zip(claims, certificates, strict=True))
+
+
+async def recalled(
+    instances: list[SearchEngine], query: str
+) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
+    """Fan one query out to every source concurrently, splitting hits from errors.
+
+    A source that is unavailable or fails at run time lands in the error map
+    instead of vanishing, so a partial recall never looks complete.
+
+    instances: the search sources to ask.
+    query: the search text every source receives.
+    """
+
+    async def attempt(instance: SearchEngine) -> tuple[str, JsonValue, str | None]:
+        try:
+            return instance.name, json.loads(await instance.search(query)), None
+        except (SearchError, EngineUnavailableError) as error:
+            return instance.name, None, str(error)
+
+    hits: dict[str, JsonValue] = {}
+    errors: dict[str, JsonValue] = {}
+    for name, found, error in await asyncio.gather(*(attempt(i) for i in instances)):
+        if error is None:
+            hits[name] = found
+        else:
+            errors[name] = error
+    return hits, errors

@@ -28,6 +28,21 @@ each milestone needs. It is a direction, not a contract, so order and scope can 
       landed too, every self-reference derives from `NAME = __name__`, and the
       parallel surfaces moved to `ThreadPoolExecutor` with free-threaded 3.14t
       evaluated and documented in the README (blocked by cvc5 wheels only).
+- [x] No-threading refactor. Every `ThreadPoolExecutor` left the codebase.
+      `recall` fans out with `asyncio.gather` over an async `fetch` seam on the
+      search engines (`httpx.AsyncClient` for the web sources and an asyncio
+      subprocess for the vault), `verify` re-runs claims through asyncio
+      subprocesses bounded at four in flight, and `cross_check` stays a
+      documented sequential loop over its CPU-bound engines. The public verbs
+      and the fire CLI remained synchronous at this stage, each driving its
+      async internals with `asyncio.run`, so the free-threading question
+      above became moot by design.
+- [x] Async-first verbs on a cyclopts CLI. The I/O verbs (`check`, `verify`,
+      `recall`, `connect`) became `async def` and compose on the caller's
+      event loop; the CLI moved from fire to cyclopts (lote's idioms), which
+      owns the loop and runs sync and async verbs alike, and synchronous
+      scripts block through the `workspace().sync` facade over the one
+      remaining `runtime.drive`.
 
 ## Stage 3b, the Lean bridge
 

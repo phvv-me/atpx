@@ -52,7 +52,7 @@ class FakeRunner:
         self.output = output
         self.calls: list[list[str]] = []
 
-    def __call__(self, argv: list[str]) -> tuple[int, str]:
+    async def __call__(self, argv: list[str]) -> tuple[int, str]:
         self.calls.append(argv)
         return self.exit_status, self.output
 

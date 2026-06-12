@@ -33,6 +33,19 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ### Changed
 
+- The CLI moved from fire to cyclopts and the I/O verbs went async-first.
+  `check`, `verify`, `recall`, and `connect` are now `async def` on
+  `Workspace` and compose on the caller's event loop (`asyncio.gather` over
+  several recalls works); the purely local and CPU-bound verbs stay sync,
+  with `cross_check` keeping its deliberate sequential loop. cyclopts owns
+  the CLI event loop and runs sync and async verbs alike, command names keep
+  their underscores (`cross_check`, `judge_brief`), certificates print as
+  canonical JSON, markdown verbs print as-is, and a multi-word query needs
+  only ordinary shell quoting (`atpx recall "Leech lattice"`, no more fire
+  double quoting). Synchronous scripts block on the async verbs through the
+  new `workspace().sync` facade, backed by the same `runtime.drive` that
+  still refuses nested event loops with a clear error. fire left the
+  dependencies, cyclopts entered.
 - Renamed the package from prova to atpx (Automatic Theorem Prover
   Accelerated). The name genericity work means the rename is one folder move,
   the CLI is now `atpx`, the workspace marker and blueprint manifests are
@@ -42,3 +55,16 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   concurrently on `ThreadPoolExecutor`; free-threaded CPython 3.14t was
   evaluated and documented in the README (installable except for cvc5, which
   ships no `cp314t` wheel; standard 3.14 stays the default).
+- The parallel surfaces dropped threads entirely. `recall` fans out with
+  `asyncio.gather` over a new `SearchEngine` intermediate whose async `fetch`
+  is the real implementation (`httpx.AsyncClient` for the web sources and an
+  asyncio subprocess for the vault qmd call), `verify` re-runs claims through
+  asyncio subprocesses bounded by a semaphore at four in flight, and
+  `cross_check` probes its CPU-bound engines in a plain sequential loop. The
+  public API and the fire CLI stay fully synchronous, every verb drives its
+  async internals with `asyncio.run` and refuses to run inside an active
+  event loop with a clear error. The `Engine` contract is unchanged for
+  compute engines, and `ChefeRunner` now executes claim commands through
+  `asyncio.create_subprocess_exec` instead of plumbum. The free-threading
+  evaluation in the README is historical context now, the question is moot
+  by design.

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import stat
 from pathlib import Path
@@ -10,6 +11,7 @@ from atpx.engines import (
     ArxivEngine,
     Capability,
     Engine,
+    EngineUnavailableError,
     LoogleEngine,
     OeisEngine,
     SearchError,
@@ -58,7 +60,7 @@ def test_vault_engine_shapes_qmd_hits(fake_chefe: Path, tmp_path: Path) -> None:
 
 
 def test_vault_engine_runs_chefe_from_its_root(fake_chefe: Path, tmp_path: Path) -> None:
-    record = 'pwd | sed \'s|.*|[{"file":"&","title":"","score":0,"snippet":""}]|\''
+    record = 'printf \'[{"file":"%s","title":"","score":0,"snippet":""}]\' "$PWD"'
     chefe_script(fake_chefe, record)
     hits = json.loads(VaultEngine(tmp_path).run("search", "anything"))
     assert hits[0]["id"] == str(tmp_path.resolve())
@@ -181,6 +183,21 @@ def test_an_unreadable_reply_becomes_a_search_error() -> None:
     respx.get("https://oeis.org/search").respond(json=[{"name": "missing number"}])
     with pytest.raises(SearchError, match="oeis.*number"):
         OeisEngine().run("search", "1,2,3")
+
+
+@respx.mock
+def test_the_async_search_seam_is_awaitable_directly() -> None:
+    respx.get("https://oeis.org/search").respond(json=[{"number": 2, "name": "n."}])
+    hits = json.loads(asyncio.run(OeisEngine().search("1,2")))
+    assert hits[0]["id"] == "A000002"
+
+
+def test_the_search_guard_refuses_an_unavailable_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(EngineUnavailableError, match="vault is not available"):
+        asyncio.run(VaultEngine(tmp_path).search("leech"))
 
 
 @pytest.mark.integration

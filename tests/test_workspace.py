@@ -1,18 +1,21 @@
+import asyncio
 import json
-import os
 import stat
+from collections.abc import Callable, Coroutine
 from pathlib import Path
 
 import pytest
-from plumbum import local
 
 from atpx.blueprint import REQUIREMENTS, Blueprint
+from atpx.certificate import Certificate
 from atpx.engines import (
     ArxivEngine,
     LoogleEngine,
     MpmathEngine,
     OeisEngine,
+    SearchEngine,
     SearchError,
+    UnsupportedOperationError,
     VaultEngine,
     ZbmathEngine,
 )
@@ -45,19 +48,19 @@ def test_workspace_discovers_root_from_the_cwd(
 
 def test_check_stamps_and_persists_evidence(ws: tuple[Workspace, FakeRunner]) -> None:
     space, runner = ws
-    certificate = space.check("demo", "ok", seed=7)
+    certificate = space.sync.check("demo", "ok", seed=7)
     assert runner.calls == [["python", "research/math/demo/checks.py", "ok"]]
     assert certificate.ok and certificate.claim == "demo/ok" and certificate.seed == 7
     assert certificate.result == {"passed": True}
     entries = evidence_entries(space.blueprints / "demo")
     assert [entry["claim"] for entry in entries] == ["demo/ok"]
-    space.check("demo", "ok")
+    space.sync.check("demo", "ok")
     assert len(evidence_entries(space.blueprints / "demo")) == 2
 
 
 def test_check_records_failures_too(root: Path) -> None:
     space = Workspace(root, runner=FakeRunner(exit_status=3, output="boom\n"))
-    certificate = space.check("demo", "ok")
+    certificate = space.sync.check("demo", "ok")
     assert not certificate.ok and certificate.exit_status == 3
     assert certificate.result == {"output": "boom"}
 
@@ -67,7 +70,7 @@ def test_check_skips_claims_this_host_cannot_run(
 ) -> None:
     space, runner = ws
     monkeypatch.setitem(REQUIREMENTS, "cuda", lambda: False)
-    certificate = space.check("demo", "gpu")
+    certificate = space.sync.check("demo", "gpu")
     assert certificate.ok and certificate.result == {"skipped": True, "requires": "cuda"}
     assert runner.calls == []
     assert not (space.blueprints / "demo" / "evidence").exists()
@@ -78,7 +81,7 @@ def test_check_runs_required_claims_when_the_host_qualifies(
 ) -> None:
     space, runner = ws
     monkeypatch.setitem(REQUIREMENTS, "cuda", lambda: True)
-    certificate = space.check("demo", "gpu")
+    certificate = space.sync.check("demo", "gpu")
     assert certificate.result == {"passed": True}
     assert runner.calls == [["python", "research/math/demo/checks.py", "gpu"]]
     assert len(evidence_entries(space.blueprints / "demo")) == 1
@@ -208,20 +211,29 @@ def reply(engine_name: str) -> str:
     return json.dumps([{"id": f"{engine_name}-1", "title": f"hit from {engine_name}"}])
 
 
+def fetcher(engine_name: str) -> Callable[[SearchEngine, str], Coroutine[None, None, str]]:
+    """An async fetch double replying with one canned hit."""
+
+    async def fetch(engine: SearchEngine, payload: str) -> str:
+        return reply(engine_name)
+
+    return fetch
+
+
 def test_recall_certifies_hits_per_source(
     ws: tuple[Workspace, FakeRunner], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     space, _ = ws
     roots: list[Path] = []
 
-    def vault_reply(engine: VaultEngine, payload: str) -> str:
+    async def vault_reply(engine: VaultEngine, payload: str) -> str:
         roots.append(engine.cwd)
         return reply("vault")
 
     monkeypatch.setattr(VaultEngine, "available", lambda self: True)
-    monkeypatch.setattr(VaultEngine, "execute", vault_reply)
-    monkeypatch.setattr(OeisEngine, "execute", lambda self, payload: reply("oeis"))
-    certificate = space.recall("kolakoski", sources=["vault", "oeis"])
+    monkeypatch.setattr(VaultEngine, "fetch", vault_reply)
+    monkeypatch.setattr(OeisEngine, "fetch", fetcher("oeis"))
+    certificate = space.sync.recall("kolakoski", sources=["vault", "oeis"])
     assert certificate.ok and certificate.engine == "atpx"
     assert certificate.claim == "recall kolakoski"
     assert certificate.result == {
@@ -240,8 +252,8 @@ def test_recall_defaults_to_every_search_source(
     space, _ = ws
     monkeypatch.setattr(VaultEngine, "available", lambda self: True)
     for engine in (VaultEngine, OeisEngine, LoogleEngine, ArxivEngine, ZbmathEngine):
-        monkeypatch.setattr(engine, "execute", lambda self, payload: "[]")
-    certificate = space.recall("anything")
+        monkeypatch.setattr(engine, "fetch", fetcher(engine.name))
+    certificate = space.sync.recall("anything")
     assert isinstance(certificate.result, dict)
     hits = certificate.result["hits"]
     assert isinstance(hits, dict)
@@ -253,12 +265,12 @@ def test_recall_records_failures_and_exits_nonzero(
 ) -> None:
     space, _ = ws
 
-    def down(engine: OeisEngine, payload: str) -> str:
+    async def down(engine: OeisEngine, payload: str) -> str:
         raise SearchError("oeis: connection refused")
 
-    monkeypatch.setattr(OeisEngine, "execute", down)
-    monkeypatch.setattr(LoogleEngine, "execute", lambda self, payload: reply("loogle"))
-    certificate = space.recall("anything", sources=["oeis", "loogle"])
+    monkeypatch.setattr(OeisEngine, "fetch", down)
+    monkeypatch.setattr(LoogleEngine, "fetch", fetcher("loogle"))
+    certificate = space.sync.recall("anything", sources=["oeis", "loogle"])
     assert not certificate.ok
     assert certificate.result == {
         "hits": {"loogle": [{"id": "loogle-1", "title": "hit from loogle"}]},
@@ -271,7 +283,7 @@ def test_recall_reports_unavailable_sources(
 ) -> None:
     space, _ = ws
     monkeypatch.setenv("PATH", str(tmp_path))
-    certificate = space.recall("anything", sources=["vault"])
+    certificate = space.sync.recall("anything", sources=["vault"])
     assert not certificate.ok
     assert certificate.result == {
         "hits": {},
@@ -283,16 +295,74 @@ def test_chefe_runner_invokes_chefe_from_the_root(
     root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake = tmp_path / "chefe"
-    fake.write_text('#!/bin/sh\necho "$@"\npwd\n')
+    fake.write_text('#!/bin/sh\necho "$@"\npwd\necho oops >&2\n')
     fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
-    local.env.path.insert(0, str(tmp_path))
-    try:
-        code, output = ChefeRunner(root)(["python", "checks.py"])
-    finally:
-        local.env.path.remove(str(tmp_path))
+    monkeypatch.setenv("PATH", str(tmp_path))
+    code, output = asyncio.run(ChefeRunner(root)(["python", "checks.py"]))
     assert code == 0
-    assert output.splitlines() == ["run python checks.py", str(root)]
+    assert output.splitlines() == ["run python checks.py", str(root), "oops"]
+
+
+def test_recall_refuses_sources_without_the_search_capability(
+    ws: tuple[Workspace, FakeRunner],
+) -> None:
+    space, _ = ws
+    with pytest.raises(UnsupportedOperationError, match="sympy only does evaluate, not search"):
+        space.sync.recall("anything", sources=["sympy"])
+
+
+def test_sync_facade_refuses_a_running_event_loop(ws: tuple[Workspace, FakeRunner]) -> None:
+    space, _ = ws
+
+    async def nested() -> Certificate:
+        return space.sync.recall("anything", sources=["oeis"])
+
+    with pytest.raises(RuntimeError, match="active event loop"):
+        asyncio.run(nested())
+
+
+def test_async_verbs_compose_on_one_event_loop(
+    ws: tuple[Workspace, FakeRunner], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    space, _ = ws
+    monkeypatch.setattr(OeisEngine, "fetch", fetcher("oeis"))
+
+    async def fanned() -> tuple[Certificate, Certificate]:
+        first, second = await asyncio.gather(
+            space.recall("first", sources=["oeis"]),
+            space.recall("second", sources=["oeis"]),
+        )
+        return first, second
+
+    first, second = asyncio.run(fanned())
+    assert first.ok and second.ok
+    assert {first.claim, second.claim} == {"recall first", "recall second"}
+
+
+class GaugeRunner:
+    """Async runner double measuring how many claim commands run at once."""
+
+    def __init__(self) -> None:
+        self.active = 0
+        self.peak = 0
+
+    async def __call__(self, argv: list[str]) -> tuple[int, str]:
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        await asyncio.sleep(0.01)
+        self.active -= 1
+        return 0, '{"passed": true}\n'
+
+
+def test_verify_bounds_the_concurrent_reruns(root: Path) -> None:
+    wide = root / "research" / "math" / "wide"
+    wide.mkdir()
+    claims = "\n".join(f'c{i} = "python {{dir}}/checks.py {i}"' for i in range(6))
+    (wide / "atpx.toml").write_text(f'zettel = "Demo Node"\n\n[claims]\n{claims}\n')
+    runner = GaugeRunner()
+    certificate = Workspace(root, runner=runner).sync.verify("wide")
+    assert certificate.ok
+    assert runner.peak == 4
 
 
 def test_verify_reruns_runnable_claims_and_flags_stale_evidence(
@@ -302,7 +372,7 @@ def test_verify_reruns_runnable_claims_and_flags_stale_evidence(
     monkeypatch.setitem(REQUIREMENTS, "cuda", lambda: False)
     prior = stamped(claim="demo/ok").model_copy(update={"git_rev": "feedbee"})
     EvidenceStore(space.blueprints / "demo").append(prior)
-    certificate = space.verify()
+    certificate = space.sync.verify()
     assert certificate.ok and certificate.claim == "verify"
     assert certificate.result == {
         "demo": {
@@ -317,7 +387,7 @@ def test_verify_reruns_runnable_claims_and_flags_stale_evidence(
 def test_verify_one_slug_reports_failures(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     space = Workspace(root, runner=FakeRunner(exit_status=2, output="boom\n"))
     monkeypatch.setitem(REQUIREMENTS, "cuda", lambda: True)
-    certificate = space.verify("demo")
+    certificate = space.sync.verify("demo")
     assert not certificate.ok and certificate.claim == "verify demo"
     assert certificate.result == {
         "demo": {
@@ -353,8 +423,8 @@ def test_connect_fingerprints_evidence_against_oeis(
         update={"result": {"theta": [1, 196560, 16773120, 398034000], "noise": [1, 2]}}
     )
     EvidenceStore(space.blueprints / "demo").append(theta)
-    monkeypatch.setattr(OeisEngine, "execute", lambda self, payload: reply("oeis"))
-    certificate = space.connect("demo")
+    monkeypatch.setattr(OeisEngine, "fetch", fetcher("oeis"))
+    certificate = space.sync.connect("demo")
     assert certificate.ok and certificate.claim == "connect demo"
     assert certificate.result == {
         "1, 196560, 16773120, 398034000": {
@@ -371,17 +441,17 @@ def test_connect_surfaces_oeis_failures(
     run = stamped(claim="demo/ok").model_copy(update={"result": [2, 3, 5, 7]})
     EvidenceStore(space.blueprints / "demo").append(run)
 
-    def down(engine: OeisEngine, payload: str) -> str:
+    async def down(engine: OeisEngine, payload: str) -> str:
         raise SearchError("oeis: connection refused")
 
-    monkeypatch.setattr(OeisEngine, "execute", down)
-    certificate = space.connect("demo")
+    monkeypatch.setattr(OeisEngine, "fetch", down)
+    certificate = space.sync.connect("demo")
     assert not certificate.ok
 
 
 def test_connect_without_sequences_is_clean(ws: tuple[Workspace, FakeRunner]) -> None:
     space, _ = ws
-    certificate = space.connect("demo")
+    certificate = space.sync.connect("demo")
     assert certificate.ok and certificate.result == {}
 
 
