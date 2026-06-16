@@ -1,7 +1,6 @@
 import asyncio
 import json
 import stat
-from collections.abc import Callable, Coroutine
 from pathlib import Path
 
 import pytest
@@ -10,11 +9,12 @@ from atpx.blueprint import REQUIREMENTS, Blueprint
 from atpx.certificate import Certificate
 from atpx.engines import (
     ArxivEngine,
+    Engine,
     LoogleEngine,
     MpmathEngine,
     OeisEngine,
-    SearchEngine,
     SearchError,
+    SympyEngine,
     UnsupportedOperationError,
     VaultEngine,
     ZbmathEngine,
@@ -23,7 +23,7 @@ from atpx.evidence import EvidenceStore
 from atpx.roles import Status
 from atpx.workspace import ChefeRunner, CrossCheckError, Workspace, find_root, workspace
 
-from .conftest import FakeRunner, evidence_entries, stamped
+from .conftest import FakeRunner, evidence_entries, fetcher, reply, stamped
 
 UNSAT = "(set-logic QF_LIA)(declare-const x Int)(assert (> x 0))(assert (< x 0))"
 SAT = "(set-logic QF_LIA)(declare-const x Int)(assert (> x 0))"
@@ -149,18 +149,20 @@ def test_compute_certifies_an_engine_result(ws: tuple[Workspace, FakeRunner]) ->
     assert str(certificate.result).startswith("1024.0")
 
 
-def test_prove_closes_smt_goals_and_names_the_engine(ws: tuple[Workspace, FakeRunner]) -> None:
+@pytest.mark.parametrize(
+    ("goal", "engine", "ok", "result"),
+    [
+        (UNSAT, "z3", True, {"closed": True, "attempts": {"z3": "unsat"}}),
+        (SAT, "atpx", False, {"closed": False, "attempts": {"z3": "sat", "cvc5": "sat"}}),
+    ],
+)
+def test_prove_closes_smt_goals_or_records_every_failed_attempt(
+    ws: tuple[Workspace, FakeRunner], goal: str, engine: str, ok: bool, result: dict[str, object]
+) -> None:
     space, _ = ws
-    certificate = space.prove(UNSAT)
-    assert certificate.engine == "z3" and certificate.ok
-    assert certificate.result == {"closed": True, "attempts": {"z3": "unsat"}}
-
-
-def test_prove_records_every_failed_attempt(ws: tuple[Workspace, FakeRunner]) -> None:
-    space, _ = ws
-    certificate = space.prove(SAT)
-    assert certificate.engine == "atpx" and not certificate.ok
-    assert certificate.result == {"closed": False, "attempts": {"z3": "sat", "cvc5": "sat"}}
+    certificate = space.prove(goal)
+    assert certificate.engine == engine and certificate.ok is ok
+    assert certificate.result == result
 
 
 def test_prove_tptp_without_provers_leaves_the_goal_open(
@@ -200,24 +202,13 @@ def test_cross_check_flags_disagreement(
     assert certificate.result["agree"] is False
 
 
-def test_cross_check_needs_two_independent_engines(ws: tuple[Workspace, FakeRunner]) -> None:
+def test_cross_check_needs_two_independent_engines(
+    ws: tuple[Workspace, FakeRunner], monkeypatch: pytest.MonkeyPatch
+) -> None:
     space, _ = ws
+    monkeypatch.setattr(Engine, "supporting", classmethod(lambda cls, capability: [SympyEngine]))
     with pytest.raises(CrossCheckError, match="at least two"):
-        space.cross_check("factor", "720")
-
-
-def reply(engine_name: str) -> str:
-    """A one-hit JSON reply a fake search engine returns."""
-    return json.dumps([{"id": f"{engine_name}-1", "title": f"hit from {engine_name}"}])
-
-
-def fetcher(engine_name: str) -> Callable[[SearchEngine, str], Coroutine[None, None, str]]:
-    """An async fetch double replying with one canned hit."""
-
-    async def fetch(engine: SearchEngine, payload: str) -> str:
-        return reply(engine_name)
-
-    return fetch
+        space.cross_check("evaluate", "720")
 
 
 def test_recall_certifies_hits_per_source(

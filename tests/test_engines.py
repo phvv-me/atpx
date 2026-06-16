@@ -1,5 +1,4 @@
 import os
-import stat
 import sys
 import types
 from decimal import Decimal
@@ -17,7 +16,6 @@ from atpx.engines import (
     EngineUnavailableError,
     EProverEngine,
     FlintEngine,
-    MpmathEngine,
     PariEngine,
     SympyEngine,
     UnsupportedOperationError,
@@ -27,8 +25,7 @@ from atpx.engines import (
 )
 from atpx.engines.base import importable
 
-UNSAT = "(set-logic QF_LIA)(declare-const x Int)(assert (> x 0))(assert (< x 0))"
-SAT = "(set-logic QF_LIA)(declare-const x Int)(assert (> x 0))"
+from .conftest import script
 
 decimals = st.decimals(
     allow_nan=False,
@@ -45,29 +42,11 @@ def test_normalization_is_idempotent_and_format_blind(value: Decimal) -> None:
     assert normalized(Capability.EVALUATE, canonical) == canonical
     assert normalized(Capability.EVALUATE, str(value * Decimal("1.000"))) == canonical
     assert normalized(Capability.EVALUATE, value.to_eng_string()) == canonical
-
-
-def test_non_numeric_results_compare_verbatim() -> None:
     assert normalized(Capability.SOLVE_SMT, " unsat\n") == "unsat"
 
 
-def test_sympy_and_mpmath_evaluate_agree_independently() -> None:
-    results = {
-        normalized(Capability.EVALUATE, engine().run("evaluate", "pi*exp(1)"))
-        for engine in (SympyEngine, MpmathEngine)
-    }
-    assert len(results) == 1
-    assert results.pop().startswith("8.53973422267356706")
-
-
-def test_flint_factors_exactly() -> None:
+def test_flint_factors_into_the_canonical_product_string() -> None:
     assert FlintEngine().run("factor", "720") == "2^4 3^2 5^1"
-
-
-def test_smt_solvers_agree_on_sat_and_unsat() -> None:
-    for engine in (Z3Engine, Cvc5Engine):
-        assert engine().run("solve-smt", UNSAT) == "unsat"
-        assert engine().run("solve-smt", SAT) == "sat"
 
 
 def test_engines_refuse_foreign_operations() -> None:
@@ -85,10 +64,12 @@ def test_supporting_preserves_preference_order() -> None:
     assert Engine.supporting(Capability.PROVE_TPTP) == [EProverEngine, VampireEngine]
 
 
-def test_importable_is_a_safe_probe() -> None:
-    assert importable("json")
-    assert not importable("no_such_module_anywhere")
-    assert not importable("no_such_package.no_such_module")
+@pytest.mark.parametrize(
+    ("module", "present"),
+    [("json", True), ("no_such_module_anywhere", False), ("no_such_pkg.no_such_module", False)],
+)
+def test_importable_is_a_safe_probe(module: str, present: bool) -> None:
+    assert importable(module) is present
 
 
 class FakePari:
@@ -123,12 +104,6 @@ def test_pari_factors_match_flint_when_present(monkeypatch: pytest.MonkeyPatch) 
 def fake_bin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     return tmp_path
-
-
-def script(directory: Path, name: str, body: str) -> None:
-    path = directory / name
-    path.write_text(f"#!/bin/sh\n{body}\n")
-    path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
 
 def test_subprocess_provers_parse_szs_status(fake_bin: Path) -> None:

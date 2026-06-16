@@ -1,6 +1,6 @@
 import asyncio
 import json
-import stat
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -40,42 +40,34 @@ def test_search_engines_stamp_atpx_own_version() -> None:
     assert OeisEngine().available()
 
 
-@pytest.fixture
-def fake_chefe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A fake chefe on PATH whose behavior the body file controls."""
-    monkeypatch.setenv("PATH", str(tmp_path))
-    return tmp_path / "chefe"
-
-
-def chefe_script(path: Path, body: str) -> None:
-    path.write_text(f"#!/bin/sh\n{body}\n")
-    path.chmod(path.stat().st_mode | stat.S_IXUSR)
-
-
-def test_vault_engine_shapes_qmd_hits(fake_chefe: Path, tmp_path: Path) -> None:
+def test_vault_engine_shapes_qmd_hits(fake_chefe: Callable[[str], Path], tmp_path: Path) -> None:
     reply = [{"file": "qmd://zettel/A.md", "title": "A", "score": 0.9, "snippet": "..."}]
-    chefe_script(fake_chefe, f"echo '{json.dumps(reply)}'")
+    fake_chefe(f"echo '{json.dumps(reply)}'")
     hits = json.loads(VaultEngine(tmp_path).run("search", "leech"))
     assert hits == [{"id": "qmd://zettel/A.md", "title": "A", "score": 0.9, "snippet": "..."}]
 
 
-def test_vault_engine_runs_chefe_from_its_root(fake_chefe: Path, tmp_path: Path) -> None:
-    record = 'printf \'[{"file":"%s","title":"","score":0,"snippet":""}]\' "$PWD"'
-    chefe_script(fake_chefe, record)
+def test_vault_engine_runs_chefe_from_its_root(
+    fake_chefe: Callable[[str], Path], tmp_path: Path
+) -> None:
+    fake_chefe('printf \'[{"file":"%s","title":"","score":0,"snippet":""}]\' "$PWD"')
     hits = json.loads(VaultEngine(tmp_path).run("search", "anything"))
     assert hits[0]["id"] == str(tmp_path.resolve())
     assert VaultEngine().cwd == Path.cwd()
 
 
-def test_vault_engine_raises_on_a_failing_qmd(fake_chefe: Path, tmp_path: Path) -> None:
-    chefe_script(fake_chefe, "echo broken >&2; exit 3")
-    with pytest.raises(SearchError, match="qmd exited 3: broken"):
-        VaultEngine(tmp_path).run("search", "leech")
-
-
-def test_vault_engine_raises_on_non_json_output(fake_chefe: Path, tmp_path: Path) -> None:
-    chefe_script(fake_chefe, "echo No results found")
-    with pytest.raises(SearchError, match="printed no JSON"):
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        ("echo broken >&2; exit 3", "qmd exited 3: broken"),
+        ("echo No results found", "printed no JSON"),
+    ],
+)
+def test_vault_engine_surfaces_qmd_failures(
+    fake_chefe: Callable[[str], Path], tmp_path: Path, body: str, match: str
+) -> None:
+    fake_chefe(body)
+    with pytest.raises(SearchError, match=match):
         VaultEngine(tmp_path).run("search", "leech")
 
 

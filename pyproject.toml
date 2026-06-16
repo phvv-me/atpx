@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atpx"
-version = "0.0.1"
+version = "0.0.2"
 description = "Agentic mathematics workbench: every result is a certificate"
 readme = "README.md"
 requires-python = ">=3.14"

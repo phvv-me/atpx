@@ -1,9 +1,12 @@
 import json
+import stat
+from collections.abc import Callable, Coroutine
 from pathlib import Path
 
 import pytest
 
 from atpx.certificate import Certificate, short_hostname
+from atpx.engines import SearchEngine
 from atpx.roles import Status
 from atpx.workspace import Workspace
 
@@ -97,3 +100,32 @@ def evidence_entries(blueprint: Path) -> list[dict[str, object]]:
     """Parsed entries of every evidence file under a blueprint."""
     files = sorted((blueprint / "evidence").glob("*.json"))
     return [entry for f in files for entry in json.loads(f.read_text())]
+
+
+def script(directory: Path, name: str, body: str) -> Path:
+    """Write an executable POSIX shell script on disk and return its path."""
+    path = directory / name
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
+
+
+@pytest.fixture
+def fake_chefe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str], Path]:
+    """A factory that installs a `chefe` with a given body, alone on PATH."""
+    monkeypatch.setenv("PATH", str(tmp_path))
+    return lambda body: script(tmp_path, "chefe", body)
+
+
+def reply(engine_name: str) -> str:
+    """A one-hit JSON reply a fake search engine returns."""
+    return json.dumps([{"id": f"{engine_name}-1", "title": f"hit from {engine_name}"}])
+
+
+def fetcher(engine_name: str) -> Callable[[SearchEngine, str], Coroutine[None, None, str]]:
+    """An async fetch double replying with one canned hit."""
+
+    async def fetch(engine: SearchEngine, payload: str) -> str:
+        return reply(engine_name)
+
+    return fetch

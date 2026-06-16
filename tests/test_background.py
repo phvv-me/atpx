@@ -1,7 +1,7 @@
 import json
 import os
-import stat
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -14,13 +14,9 @@ from .conftest import FakeRunner, stamped
 
 
 @pytest.fixture
-def fake_chefe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def echoing_chefe(fake_chefe: Callable[[str], Path]) -> Path:
     """A fake chefe alone on PATH that echoes its argv into stdout."""
-    script = tmp_path / "chefe"
-    script.write_text('#!/bin/sh\necho "ran $@"\n')
-    script.chmod(script.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("PATH", str(tmp_path))
-    return script
+    return fake_chefe('echo "ran $@"')
 
 
 def settled(log: Path, timeout: float = 5.0) -> str:
@@ -34,7 +30,7 @@ def settled(log: Path, timeout: float = 5.0) -> str:
 
 
 def test_background_check_detaches_and_records_the_submission(
-    ws: tuple[Workspace, FakeRunner], fake_chefe: Path
+    ws: tuple[Workspace, FakeRunner], echoing_chefe: Path
 ) -> None:
     space, runner = ws
     certificate = space.sync.check("demo", "ok", background=True)
@@ -50,7 +46,7 @@ def test_background_check_detaches_and_records_the_submission(
 
 
 def test_background_check_validates_the_claim_before_detaching(
-    ws: tuple[Workspace, FakeRunner], fake_chefe: Path
+    ws: tuple[Workspace, FakeRunner], echoing_chefe: Path
 ) -> None:
     space, _ = ws
     with pytest.raises(KeyError, match="known claims"):
@@ -59,7 +55,7 @@ def test_background_check_validates_the_claim_before_detaching(
 
 
 def test_checks_reports_pending_then_landed(
-    ws: tuple[Workspace, FakeRunner], fake_chefe: Path
+    ws: tuple[Workspace, FakeRunner], echoing_chefe: Path
 ) -> None:
     space, _ = ws
     space.sync.check("demo", "ok", background=True)
@@ -72,7 +68,7 @@ def test_checks_reports_pending_then_landed(
 
 
 def test_checks_ignore_certificates_for_other_claims(
-    ws: tuple[Workspace, FakeRunner], fake_chefe: Path
+    ws: tuple[Workspace, FakeRunner], echoing_chefe: Path
 ) -> None:
     space, _ = ws
     space.sync.check("demo", "ok", background=True)
