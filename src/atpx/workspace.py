@@ -414,7 +414,11 @@ class Workspace:
         goal: the goal text in SMT-LIB or TPTP form.
         syntax: `smtlib` or `tptp`, detected from the goal when omitted.
         """
-        capability, closing = CLOSING[syntax or self.syntax(goal)]
+        dialect = syntax or self.syntax(goal)
+        if dialect not in CLOSING:
+            known = ", ".join(sorted(CLOSING))
+            raise ValueError(f"unknown syntax {dialect!r}; pass one of {known}")
+        capability, closing = CLOSING[dialect]
         attempts: dict[str, str] = {}
         for engine in Engine.supporting(capability):
             instance = engine()

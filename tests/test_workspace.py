@@ -180,6 +180,12 @@ def test_prove_rejects_undetectable_syntax(ws: tuple[Workspace, FakeRunner]) -> 
         space.prove("just words")
 
 
+def test_prove_rejects_an_explicit_unknown_syntax(ws: tuple[Workspace, FakeRunner]) -> None:
+    space, _ = ws
+    with pytest.raises(ValueError, match="unknown syntax 'lean'; pass one of smtlib, tptp"):
+        space.prove("(assert true)", syntax="lean")
+
+
 def test_cross_check_certifies_agreement(ws: tuple[Workspace, FakeRunner]) -> None:
     space, _ = ws
     certificate = space.cross_check("evaluate", "sqrt(2)")

@@ -63,7 +63,10 @@ class Blueprint(FrozenModel):
 
         directory: the `research/math/<slug>` directory.
         """
-        manifest = tomllib.loads((directory / CONFIG).read_text())
+        config = directory / CONFIG
+        if not config.exists():
+            raise FileNotFoundError(f"no blueprint {directory.name!r} at {directory}")
+        manifest = tomllib.loads(config.read_text())
         return cls(
             slug=directory.name,
             directory=directory,

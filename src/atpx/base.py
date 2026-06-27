@@ -1,19 +1,9 @@
-from functools import cached_property
+"""Pydantic v2 base models for atpx.
 
-from pydantic import BaseModel, ConfigDict
+The house bases live in :mod:`patos`; atpx re-exports the mutable value object and the immutable
+certificate/record base it uses, so call sites import them from one place.
+"""
 
-IGNORED_TYPES: tuple[type, ...] = (cached_property,)
+from patos import FrozenModel, Model
 
 __all__ = ["FrozenModel", "Model"]
-
-
-class Model(BaseModel):
-    """Mutable model with standard types only."""
-
-    model_config = ConfigDict(ignored_types=IGNORED_TYPES)
-
-
-class FrozenModel(BaseModel):
-    """Immutable model for certificates and records that never mutate after construction."""
-
-    model_config = ConfigDict(frozen=True, populate_by_name=True, ignored_types=IGNORED_TYPES)

@@ -68,3 +68,20 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   `asyncio.create_subprocess_exec` instead of plumbum. The free-threading
   evaluation in the README is historical context now, the question is moot
   by design.
+
+## 0.0.3 - 2026-06-16
+
+### Fixed
+
+- The CLI now turns a verb's own domain error into one clean `error:` line and
+  a nonzero exit instead of dumping a Python traceback. An unknown engine, a
+  missing slug, an unknown claim or node, a forbidden role transition, or a
+  down search source each print the message the verb already wrote. A genuine
+  programming fault still surfaces its full traceback, since `main` catches
+  only the expected exception families.
+- `prove` validates an explicit `--syntax` value against the known dialects and
+  reports `unknown syntax 'x'; pass one of smtlib, tptp`, where it used to die
+  on a raw `KeyError` from the internal closing-condition table.
+- `Blueprint.load` reports `no blueprint 'slug' at <path>` for a missing
+  blueprint directory instead of leaking a bare `FileNotFoundError` on the
+  manifest path.

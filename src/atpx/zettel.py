@@ -101,17 +101,41 @@ class Zettel:
     def set_status(self, status: Status) -> None:
         """Rewrite the frontmatter `status` field, the note's one mutable field.
 
+        Edits the field in place when the note already carries a frontmatter block,
+        inserts it just inside the opening fence when the block has no status line, and
+        opens a fresh frontmatter block when the note has none. Reading tolerates a note
+        whose closing fence is missing (see :attr:`frontmatter`), so writing must too
+        rather than raise on the same malformed file.
+
         status: the new lifecycle status.
         """
         lines = self.text.splitlines()
-        fence = lines.index("---", 1)
+        field = f"status: {status.value}"
+        if not lines or lines[0] != "---":
+            lines[:0] = ["---", field, "---", ""]
+            self.path.write_text("\n".join(lines) + "\n")
+            return
+        fence = self.__closing_fence(lines)
         for position in range(1, fence):
             if lines[position].startswith("status:"):
-                lines[position] = f"status: {status.value}"
+                lines[position] = field
                 break
         else:
-            lines.insert(1, f"status: {status.value}")
+            lines.insert(1, field)
         self.path.write_text("\n".join(lines) + "\n")
+
+    @staticmethod
+    def __closing_fence(lines: list[str]) -> int:
+        """Index of the frontmatter's closing `---`, or the line count when it is absent.
+
+        A note that opens a frontmatter block but never closes it still has every line
+        after the opening fence treated as frontmatter, the same lenient reading
+        :attr:`frontmatter` does, so a status edit never raises on a half-written file.
+        """
+        try:
+            return lines.index("---", 1)
+        except ValueError:
+            return len(lines)
 
     def append_log(self, line: str) -> None:
         """Append one formatted line to the `## Log` section, creating it when missing.

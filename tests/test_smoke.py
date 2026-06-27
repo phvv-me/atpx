@@ -7,6 +7,7 @@ import pytest
 import atpx
 from atpx import cli
 from atpx.workspace import Workspace
+from atpx.zettel import Vault
 
 from .conftest import FakeRunner
 
@@ -71,3 +72,45 @@ def test_main_discovers_the_workspace_from_the_cwd(
     cli.main()
     frontier = json.loads(capsys.readouterr().out)
     assert [node["node"] for node in frontier] == ["Demo Node"]
+
+
+@pytest.mark.parametrize(
+    ("argv", "fragment"),
+    [
+        (["compute", "nosuch", "evaluate", "2+2"], "no implementation with name='nosuch'"),
+        (["brief", "ghost"], "no blueprint 'ghost'"),
+        (["check", "demo", "ghost"], "no claim 'ghost'"),
+        (["log", "Nowhere", "refuter", "t", "msg"], "no note named 'Nowhere'"),
+        (["cross_check", "nonsense", "2+2"], "not a valid Capability"),
+        (["prove", "a", "--syntax", "nonsense"], "unknown syntax 'nonsense'"),
+    ],
+)
+def test_main_turns_a_domain_error_into_one_clean_line(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+    fragment: str,
+) -> None:
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(sys, "argv", [atpx.NAME, *argv])
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+    assert exit_info.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert captured.err.startswith("error: ") and fragment in captured.err
+
+
+def test_main_lets_a_genuine_programming_fault_surface(
+    root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(self: Vault) -> list[dict[str, str | dict[str, str]]]:
+        raise TypeError("not a domain error")
+
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(Vault, "frontier", boom)
+    monkeypatch.setattr(sys, "argv", [atpx.NAME, "graph"])
+    with pytest.raises(TypeError, match="not a domain error"):
+        cli.main()

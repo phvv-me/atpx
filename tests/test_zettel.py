@@ -73,6 +73,26 @@ def test_set_status_inserts_when_the_field_is_missing() -> None:
     assert note.status is Status.OPEN
 
 
+def test_set_status_opens_a_block_on_a_plain_note() -> None:
+    """A note with no frontmatter fences gains one rather than raising on the write."""
+    note = written("# Just Prose\n\nNo fences here.\n")
+    note.set_status(Status.OPEN)
+    assert note.status is Status.OPEN
+    assert "Just Prose" in note.text  # the original body survives
+
+
+def test_set_status_tolerates_a_missing_closing_fence() -> None:
+    """An unclosed frontmatter block edits in place instead of crashing on `index`.
+
+    The read path (`frontmatter`) already treats every line after the opening fence as
+    frontmatter, so the write path must edit the same malformed note without raising.
+    """
+    note = written("---\nstatus: open\ntitle: half written\n")
+    note.set_status(Status.VERIFIED)
+    assert note.status is Status.VERIFIED
+    assert note.frontmatter["title"] == "half written"
+
+
 def test_a_plain_note_has_no_frontmatter() -> None:
     note = written("# Just Prose\n\nNo fences here.\n")
     assert note.frontmatter == {}
