@@ -1,16 +1,21 @@
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from atpx.roles import Status
-from atpx.zettel import Vault, Zettel
+from atpx.zettel import LOG_LINE, LogEntry, Vault, Zettel
 
 from .conftest import zettel_text
 
 statuses = st.sampled_from(Status)
+whos = st.from_regex(r"\w+", fullmatch=True)
+tags = st.from_regex(r"[\w.-]+", fullmatch=True)
+messages = st.text(max_size=80).map(lambda text: "".join(text.splitlines()))
 prose = (
     st.text(
         alphabet=st.characters(categories=("Lu", "Ll", "Nd", "Zs"), max_codepoint=0x2000),
@@ -151,3 +156,26 @@ def test_log_lines_parse_into_entries() -> None:
 
 def test_a_note_without_a_log_has_no_entries() -> None:
     assert written(zettel_text(log=None)).log == []
+
+
+@given(whos, tags, messages)
+def test_any_accepted_log_entry_round_trips_through_the_parser(
+    who: str, tag: str, message: str
+) -> None:
+    entry = LogEntry.today(who=who, tag=tag, message=message)
+    (parsed,) = LOG_LINE.findall(str(entry))
+    assert parsed == (entry.who, entry.tag, entry.date, entry.message)
+
+
+def test_log_entries_refuse_fields_the_parser_would_skip() -> None:
+    with pytest.raises(ValidationError, match="pattern"):
+        LogEntry.today(who="the refuter", tag="t", message="m")
+    with pytest.raises(ValidationError, match="pattern"):
+        LogEntry.today(who="refuter", tag="a tag", message="m")
+    with pytest.raises(ValidationError, match="one line"):
+        LogEntry.today(who="refuter", tag="t", message="one\ntwo")
+
+
+def test_today_stamps_the_utc_date() -> None:
+    entry = LogEntry.today(who="settle", tag="in_progress", message="")
+    assert entry.date == datetime.now(UTC).date().isoformat()

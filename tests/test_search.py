@@ -18,6 +18,7 @@ from atpx.engines import (
     VaultEngine,
     ZbmathEngine,
 )
+from atpx.engines.base import importable
 
 ATOM_FEED = """<?xml version='1.0' encoding='UTF-8'?>
 <feed xmlns="http://www.w3.org/2005/Atom">
@@ -117,10 +118,18 @@ def test_loogle_shapes_declaration_hits() -> None:
 
 
 @respx.mock
-def test_loogle_surfaces_query_errors() -> None:
-    respx.get("https://loogle.lean-lang.org/json").respond(json={"error": "unknown identifier"})
-    with pytest.raises(SearchError, match="unknown identifier"):
-        LoogleEngine().run("search", "bad(((")
+def test_loogle_treats_a_query_parse_error_as_zero_hits() -> None:
+    respx.get("https://loogle.lean-lang.org/json").respond(
+        json={"error": "Unknown identifier `S40`"}
+    )
+    assert json.loads(LoogleEngine().run("search", "S40")) == []
+
+
+@respx.mock
+def test_loogle_still_errors_on_a_server_failure() -> None:
+    respx.get("https://loogle.lean-lang.org/json").respond(status_code=500)
+    with pytest.raises(SearchError, match="loogle"):
+        LoogleEngine().run("search", "Real.sqrt")
 
 
 @respx.mock
@@ -156,6 +165,19 @@ def test_zbmath_shapes_document_hits() -> None:
     hits = json.loads(ZbmathEngine().run("search", "Leech lattice"))
     assert hits[0]["id"] == "https://zbmath.org/3282426"
     assert hits[1]["id"] == "0001.00001"
+
+
+@respx.mock
+def test_zbmath_treats_404_as_zero_hits() -> None:
+    respx.get("https://api.zbmath.org/v1/document/_search").respond(status_code=404)
+    assert json.loads(ZbmathEngine().run("search", "no such phrase anywhere")) == []
+
+
+@respx.mock
+def test_zbmath_still_errors_on_a_server_failure() -> None:
+    respx.get("https://api.zbmath.org/v1/document/_search").respond(status_code=500)
+    with pytest.raises(SearchError, match="zbmath"):
+        ZbmathEngine().run("search", "anything")
 
 
 @respx.mock
@@ -196,3 +218,8 @@ def test_the_search_guard_refuses_an_unavailable_source(
 def test_live_oeis_finds_the_leech_theta_series() -> None:
     hits = json.loads(OeisEngine().run("search", "196560, 16773120"))
     assert any(hit["id"] == "A008408" for hit in hits)
+
+
+def test_importable_handles_submodules_of_missing_packages() -> None:
+    assert importable("json")
+    assert not importable("nosuch_pkg_anywhere.sub")

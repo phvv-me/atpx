@@ -41,17 +41,37 @@ def test_cli_runs_an_async_verb_on_its_own_loop(
     assert runner.calls == [["python", "research/math/demo/checks.py", "ok"]]
 
 
+def test_cli_run_passes_hyphenated_command_tokens_verbatim(
+    ws: tuple[Workspace, FakeRunner], capsys: pytest.CaptureFixture[str]
+) -> None:
+    space, runner = ws
+    cli.build(space)(["run", "demo", "probe", "python", "-c", "print(1)"])
+    certificate = json.loads(capsys.readouterr().out)
+    assert certificate["claim"] == "demo/probe"
+    assert runner.calls == [["python", "-c", "print(1)"]]
+
+
+def test_cli_run_options_before_the_command_still_parse(
+    ws: tuple[Workspace, FakeRunner], capsys: pytest.CaptureFixture[str]
+) -> None:
+    space, runner = ws
+    cli.build(space)(["run", "demo", "seeded", "--seed", "7", "python", "-c", "print(1)"])
+    certificate = json.loads(capsys.readouterr().out)
+    assert certificate["seed"] == 7
+    assert runner.calls == [["python", "-c", "print(1)"]]
+
+
 def test_cli_keeps_underscored_command_names_and_prints_markdown_as_is(
     ws: tuple[Workspace, FakeRunner], capsys: pytest.CaptureFixture[str]
 ) -> None:
     space, _ = ws
     app = cli.build(space)
-    app(["cross_check", "evaluate", "sqrt(2)"])
-    certificate = json.loads(capsys.readouterr().out)
-    assert certificate["result"]["agree"] is True
-    app(["lean_candidates"])
-    table = capsys.readouterr().out
-    assert table.splitlines()[0] == "| node | backlinks | length | score |"
+    app(["judge_brief", "demo"])
+    text = capsys.readouterr().out
+    assert text.startswith("# Judge brief for Demo Node")
+    app(["doctor"])
+    report = json.loads(capsys.readouterr().out)
+    assert report["invalid_statuses"] == {}
 
 
 def test_cli_help_lists_the_verbs_and_prints_no_result(
@@ -60,7 +80,7 @@ def test_cli_help_lists_the_verbs_and_prints_no_result(
     space, _ = ws
     cli.build(space)(["--help"])
     out = capsys.readouterr().out
-    assert "cross_check" in out and "judge_brief" in out
+    assert "settle" in out and "doctor" in out and "judge_brief" in out
     assert "null" not in out
 
 
@@ -77,12 +97,14 @@ def test_main_discovers_the_workspace_from_the_cwd(
 @pytest.mark.parametrize(
     ("argv", "fragment"),
     [
-        (["compute", "nosuch", "evaluate", "2+2"], "no implementation with name='nosuch'"),
+        (["recall", "q", "--sources", "nosuch"], "no implementation with name='nosuch'"),
         (["brief", "ghost"], "no blueprint 'ghost'"),
         (["check", "demo", "ghost"], "no claim 'ghost'"),
         (["log", "Nowhere", "refuter", "t", "msg"], "no note named 'Nowhere'"),
-        (["cross_check", "nonsense", "2+2"], "not a valid Capability"),
-        (["prove", "a", "--syntax", "nonsense"], "unknown syntax 'nonsense'"),
+        (["log", "Demo Node", "the refuter", "t", "msg"], "pattern"),
+        (["run", "a/b", "ok", "echo", "hi"], "single path segments"),
+        (["settle", "Demo Node", "immaculate"], "not a valid Status"),
+        (["settle", "Demo Node", "sketched"], "judgment"),
     ],
 )
 def test_main_turns_a_domain_error_into_one_clean_line(
@@ -101,6 +123,11 @@ def test_main_turns_a_domain_error_into_one_clean_line(
     assert captured.out == ""
     assert "Traceback" not in captured.err
     assert captured.err.startswith("error: ") and fragment in captured.err
+
+
+def test_display_prints_nothing_for_no_result(capsys: pytest.CaptureFixture[str]) -> None:
+    cli.display(None)
+    assert capsys.readouterr().out == ""
 
 
 def test_main_lets_a_genuine_programming_fault_surface(

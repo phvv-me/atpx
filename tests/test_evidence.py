@@ -57,3 +57,17 @@ def test_ledgers_read_every_host_file(tmp_path: Path) -> None:
     assert set(ledgers) == {mine.hostname, "elsewhere"}
     assert [entry.claim for entry in ledgers[mine.hostname]] == ["a"]
     assert [entry.claim for entry in ledgers["elsewhere"]] == ["b"]
+
+
+def test_ledgers_skip_and_strays_report_broken_files(tmp_path: Path) -> None:
+    home = tmp_path / "evidence"
+    home.mkdir(parents=True)
+    (home / "broken.json").write_text("{not json")
+    (home / "shaped_wrong.json").write_text('["just", "strings"]')
+    EvidenceStore(tmp_path).append(stamped())
+    ledgers = EvidenceStore.ledgers(tmp_path)
+    assert set(ledgers) == {stamped().hostname}
+    strays = {path.name for path in EvidenceStore.strays(tmp_path)}
+    assert strays == {"broken.json", "shaped_wrong.json"}
+    with pytest.raises(EvidenceError, match="not a certificate ledger"):
+        EvidenceStore(tmp_path, hostname="broken").read()

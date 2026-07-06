@@ -18,6 +18,7 @@ class ResultsIndex:
         (frozenset({Status.SKETCHED}), "## Sketched (refuter-survived, usable)"),
         (frozenset({Status.IN_PROGRESS, Status.OPEN}), "## In progress / open"),
         (frozenset({Status.REFUTED}), "## Refuted"),
+        (frozenset({Status.KNOWN}), "## Known (already in the literature)"),
         (frozenset({Status.ABANDONED}), "## Abandoned"),
     ]
 

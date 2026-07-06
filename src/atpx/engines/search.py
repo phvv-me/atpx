@@ -113,8 +113,13 @@ class NetworkSearchEngine(SearchEngine, ABC):
 
     Abstract, so it never enrolls in the registry itself. Availability is EAFP:
     these engines always report available and surface network or shape failures
-    at run time as `SearchError`, which `recall` turns into a nonzero certificate.
+    at run time as `SearchError`, which `recall` turns into a nonzero
+    certificate. A source may declare `empty_statuses`, HTTP codes its API uses
+    to say "no results", which come back as zero hits rather than errors, while
+    timeouts, connection failures, and 5xx stay genuine errors.
     """
+
+    empty_statuses: ClassVar[frozenset[int]] = frozenset()
 
     def available(self) -> bool:
         """Always true; reachability is settled by the request itself."""
@@ -133,6 +138,8 @@ class NetworkSearchEngine(SearchEngine, ABC):
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
                 response = await client.get(self.endpoint(payload))
+            if response.status_code in self.empty_statuses:
+                return json.dumps([])
             response.raise_for_status()
             return json.dumps(self.hits(response)[:LIMIT])
         except (httpx.HTTPError, ValueError, KeyError, ElementTree.ParseError) as error:
@@ -172,10 +179,15 @@ class LoogleEngine(NetworkSearchEngine):
         return f"https://loogle.lean-lang.org/json?q={quote(query)}"
 
     def hits(self, response: httpx.Response) -> list[Hit]:
-        """One hit per declaration: name, type signature, and defining module."""
+        """One hit per declaration: name, type signature, and defining module.
+
+        Loogle only understands Lean identifiers and patterns, so its `error`
+        field on a query it cannot parse ("Unknown identifier ...") means the
+        query matches nothing, zero hits rather than a failed recall.
+        """
         body = response.json()
         if "error" in body:
-            raise SearchError(f"{self.name}: {body['error']}")
+            return []
         return [
             {"id": entry["name"], "title": entry["type"], "module": entry["module"]}
             for entry in body.get("hits") or []
@@ -205,9 +217,14 @@ class ArxivEngine(NetworkSearchEngine):
 
 
 class ZbmathEngine(NetworkSearchEngine):
-    """Review search through the zbMATH Open REST API, keyless."""
+    """Review search through the zbMATH Open REST API, keyless.
+
+    The API answers a query with no matching documents as HTTP 404, so that
+    status is zero hits, never an error.
+    """
 
     name = "zbmath"
+    empty_statuses: ClassVar[frozenset[int]] = frozenset({404})
 
     def endpoint(self, query: str) -> str:
         """ZbMATH Open document search URL."""

@@ -1,4 +1,3 @@
-import decimal
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from importlib.metadata import PackageNotFoundError, version
@@ -7,17 +6,10 @@ from typing import ClassVar
 
 from patos import Registry
 
-DIGITS = 30
-COMPARED_DIGITS = 20
-
 
 class Capability(StrEnum):
-    """The typed operations engines implement, atpx's cross-engine vocabulary."""
+    """The typed operations engines implement; v2 keeps only read-only search."""
 
-    EVALUATE = "evaluate"
-    FACTOR = "factor"
-    SOLVE_SMT = "solve-smt"
-    PROVE_TPTP = "prove-tptp"
     SEARCH = "search"
 
 
@@ -40,34 +32,13 @@ def importable(module: str) -> bool:
         return False
 
 
-def normalized(capability: Capability, value: str) -> str:
-    """Canonical form of an engine result so independent engines compare equal.
-
-    Numeric evaluations are rounded to a shared significand so formatting noise
-    in the last digits never masks or fakes agreement; everything else is
-    compared verbatim after trimming whitespace.
-
-    capability: the operation that produced the value.
-    value: one engine's raw result string.
-    """
-    if capability is Capability.EVALUATE:
-        context = decimal.Context(prec=COMPARED_DIGITS)
-        return str(context.create_decimal(value).normalize(context))
-    return value.strip()
-
-
 class Engine(Registry, ABC):
-    """Registry root for computation engines, each stamping name and version into evidence.
+    """Registry root for engines, each stamping name and version into evidence.
 
     A concrete engine declares its import `module`, its installed `distribution`
-    name, and the one `capability` it serves; stage 2 grows the vocabulary by
-    adding engines and capabilities, never by editing this contract.
-
-    The layer stays deliberately minimal (availability, version, run and stamp,
-    cross-engine agreement) and grows no per-function typed wrappers, because atpx
-    certifies results and never proxies APIs, agents import sympy or flint or z3
-    directly in their own snippets. Zettel "Prova Proof Bookkeeping Package", the
-    no-proxy principle section.
+    name, and the one `capability` it serves. The layer stays deliberately
+    minimal because atpx certifies results and never proxies APIs; agents
+    import sympy or flint directly in their own snippets.
     """
 
     name: ClassVar[str]
@@ -96,16 +67,12 @@ class Engine(Registry, ABC):
         """Run this engine's capability on a payload, returning the raw result string."""
 
     def run(self, operation: Capability | str, payload: str) -> str:
-        """Guarded entry point: refuse unsupported operations and unavailable hosts.
+        """Guarded sync entry: validate the capability and refuse unavailable hosts.
 
         operation: the requested capability.
-        payload: the operation input, an expression, integer, or goal text.
+        payload: the operation input.
         """
-        requested = Capability(operation)
-        if requested is not self.capability:
-            raise UnsupportedOperationError(
-                f"{self.name} only does {self.capability.value}, not {requested.value}"
-            )
+        Capability(operation)
         self.ensure_available()
         return self.execute(payload)
 

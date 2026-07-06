@@ -8,6 +8,42 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ### Added
 
+- `ATPX_ROOT` environment override for workspace discovery: when set, every
+  invocation pins to that root instead of walking up from the cwd, so verbs
+  fired from anywhere in a monorepo cannot silently target the wrong vault.
+  An explicit root argument still wins.
+- `fit` gains `--features` (restrict the fit to named columns, recorded in
+  the certificate), comma-joined operator menus (`--unary exp,log`,
+  `--binary "+,-,*"`) alongside repeated flags, and cwd-first data path
+  resolution (root-relative second).
+
+### Changed
+
+- Internal restructure: `workspace.py` is now a thin facade over service
+  modules, `running` (capture-first execution, freshness sweep),
+  `settlement` (evidence gates as a patos registry, one class per gated
+  status), `leaning` (Lean build audit), `discovery` (fit lane behind a
+  `SymbolicRegressor` seam with holdout policy objects), `recalling`
+  (federated search fan-out), and `doctoring` (the lint). The CLI verb
+  surface is unchanged.
+- Blueprint manifests are serialized by a real minimal TOML emitter that
+  round-trips through `tomllib` (quoted keys, escaped control characters,
+  inline tables), and rewriting a manifest preserves top-level keys it does
+  not manage.
+- `verify` staleness is judged per host: a claim only counts stale when no
+  host's newest certificate matches the current revision, so cross-host
+  clock skew cannot shadow fresh local evidence.
+- Journal writes (`log`, `settle`) validate against the log parser before
+  touching the file, stamp the UTC date (the certificate clock), and a
+  message-less settle now lands as a line the parser reads back.
+- `settle verified` refuses certificates without a Lean audit shape, and a
+  malformed `claims` manifest value fails as a clean domain error.
+- Claim payload parsing reads indented JSON and takes the last complete
+  value on a line with several concatenated values (interleaved writers).
+- `recall` and `verify` fan out under `asyncio.TaskGroup`, so a fault or
+  ctrl-c cancels and awaits sibling requests instead of abandoning them.
+- Slugs and claims are validated as single path segments at registration.
+
 - Initial public project scaffolding.
 - Stage 2 recall: the `recall` verb and CLI federate one query across `search`
   engines (vault via qmd, OEIS, loogle, arXiv, zbMATH Open) into a single

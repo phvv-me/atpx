@@ -53,6 +53,7 @@ def build(space: Workspace) -> App:
         name_transform=verbatim,
         result_action=display,
     )
+    app.command(space.run)
     app.command(space.check)
     app.command(space.checks)
     app.command(space.verify)
@@ -60,15 +61,13 @@ def build(space: Workspace) -> App:
     app.command(space.judge_brief)
     app.command(space.status)
     app.command(space.graph)
+    app.command(space.doctor)
+    app.command(space.settle)
+    app.command(space.lean)
+    app.command(space.fit)
     app.command(space.recall)
-    app.command(space.connect)
-    app.command(space.strategies)
-    app.command(space.lean_candidates)
     app.command(space.log)
     app.command(space.index)
-    app.command(space.compute)
-    app.command(space.prove)
-    app.command(space.cross_check)
     return app
 
 

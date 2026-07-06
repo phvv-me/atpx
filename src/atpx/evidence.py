@@ -27,18 +27,51 @@ class EvidenceStore:
     def ledgers(cls, directory: Path) -> dict[str, list[Certificate]]:
         """Every host's certificates under a blueprint directory, keyed by hostname.
 
+        Tolerant by design: a file under `evidence/` that is not a certificate
+        ledger (agents park raw data artifacts there) is skipped here and
+        reported by `strays` and `doctor`, never an exception.
+
         directory: the blueprint directory holding `evidence/`.
         """
-        files = sorted((directory / "evidence").glob("*.json"))
-        return {file.stem: cls(directory, hostname=file.stem).read() for file in files}
+        found = {}
+        for file in sorted((directory / "evidence").glob("*.json")):
+            try:
+                found[file.stem] = cls(directory, hostname=file.stem).read()
+            except EvidenceError:
+                continue
+        return found
+
+    @classmethod
+    def strays(cls, directory: Path) -> list[Path]:
+        """Files under `evidence/` that are not certificate ledgers, for `doctor`.
+
+        directory: the blueprint directory holding `evidence/`.
+        """
+        stray = []
+        for file in sorted((directory / "evidence").glob("*.json")):
+            try:
+                cls(directory, hostname=file.stem).read()
+            except EvidenceError:
+                stray.append(file)
+        return stray
 
     def read(self) -> list[Certificate]:
-        """All certificates recorded so far, oldest first."""
+        """All certificates recorded so far, oldest first.
+
+        Raises `EvidenceError` when the file exists but is not a certificate
+        ledger, so `append` can refuse to grow a data artifact while the
+        tolerant readers skip it.
+        """
         try:
             entries = json.loads(self.path.read_text())
         except FileNotFoundError:
             return []
-        return [Certificate.model_validate(entry) for entry in entries]
+        except json.JSONDecodeError as error:
+            raise EvidenceError(f"{self.path} is not a certificate ledger: {error}") from error
+        try:
+            return [Certificate.model_validate(entry) for entry in entries]
+        except (TypeError, ValueError) as error:
+            raise EvidenceError(f"{self.path} is not a certificate ledger") from error
 
     def append(self, certificate: Certificate) -> Path:
         """Append one certificate, refusing anything stamped by another host.

@@ -80,7 +80,9 @@ def test_judge_brief_diffs_the_node_and_lists_newer_claims(
     ws: tuple[Workspace, FakeRunner],
 ) -> None:
     space, _ = ws
-    space.log("Demo Node", "refuter", "ties", "ruling.")
+    ruling = space.blueprints / "demo" / "ruling.md"
+    ruling.write_text("NONE.\n")
+    space.settle("Demo Node", "sketched", "ruling.", judgment=str(ruling))
     space.log("Demo Node", "prover", "lemma", "a new lemma landed.")
     newer = stamped(claim="demo/ok").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
     EvidenceStore(space.blueprints / "demo").append(newer)
@@ -90,11 +92,28 @@ def test_judge_brief_diffs_the_node_and_lists_newer_claims(
     assert "- ok gained 1 certificates" in text
 
 
+def test_judge_brief_counts_unprefixed_claims_under_their_full_id(
+    ws: tuple[Workspace, FakeRunner],
+) -> None:
+    space, _ = ws
+    ruling = space.blueprints / "demo" / "ruling.md"
+    ruling.write_text("NONE.\n")
+    space.settle("Demo Node", "sketched", "ruling.", judgment=str(ruling))
+    fit = stamped(claim="fit data.csv").model_copy(
+        update={"timestamp": "2099-01-01T00:00:00+00:00"}
+    )
+    EvidenceStore(space.blueprints / "demo").append(fit)
+    text = space.judge_brief("demo")
+    assert "- fit data.csv gained 1 certificates" in text
+
+
 def test_judge_brief_with_nothing_new_says_so(ws: tuple[Workspace, FakeRunner]) -> None:
     space, _ = ws
     old = stamped(claim="demo/ok")
     EvidenceStore(space.blueprints / "demo").append(old)
-    space.log("Demo Node", "refuter", "ties", "ruling.")
+    ruling = space.blueprints / "demo" / "ruling.md"
+    ruling.write_text("NONE.\n")
+    space.settle("Demo Node", "sketched", "ruling.", judgment=str(ruling))
     text = space.judge_brief("demo")
     assert "Unchanged." in text
     assert "None." in text

@@ -5,10 +5,10 @@ from pathlib import Path
 from .base import FrozenModel
 from .blueprint import Blueprint
 from .evidence import EvidenceStore
-from .roles import Role
 from .zettel import LogEntry, Vault, Zettel
 
 FENCE = "````"
+JUDGES = frozenset({"refuter", "settle"})
 
 
 class Judgment(FrozenModel):
@@ -51,8 +51,8 @@ class JudgmentLedger:
 
 
 def last_judgment(node: Zettel) -> LogEntry | None:
-    """The node's most recent refuter journal entry, its last judgment line."""
-    rulings = [entry for entry in node.log if entry.who == Role.REFUTER.value]
+    """The node's most recent judgment line, a refuter entry or a settle entry."""
+    rulings = [entry for entry in node.log if entry.who in JUDGES]
     return rulings[-1] if rulings else None
 
 
@@ -168,12 +168,16 @@ class JudgeBriefing:
         return f"{FENCE}diff\n{body}\n{FENCE}" if body else "Unchanged."
 
     def landed(self, judgment: Judgment) -> str:
-        """Certificate counts per claim stamped after the judgment, one bullet each."""
+        """Certificate counts per claim stamped after the judgment, one bullet each.
+
+        Claims outside the `slug/` convention (`fit data.csv`) count under
+        their full id rather than collapsing into an empty name.
+        """
         counts: dict[str, int] = {}
         for certificates in EvidenceStore.ledgers(self.blueprint.directory).values():
             for entry in certificates:
                 if entry.timestamp > judgment.timestamp:
-                    name = entry.claim.partition("/")[2]
+                    name = entry.claim.removeprefix(f"{self.blueprint.slug}/")
                     counts[name] = counts.get(name, 0) + 1
         lines = [
             f"- {claim} gained {count} certificates" for claim, count in sorted(counts.items())

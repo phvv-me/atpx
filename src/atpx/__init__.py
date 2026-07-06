@@ -3,10 +3,10 @@
 # derives from it; reading pyproject.toml at runtime would be fragile (it isn't
 # in the wheel). The constants precede the re-exports so submodules can import
 # them while the package is still initializing.
-NAME = __name__
+NAME: str = __name__
 
 # The manifest a user writes, both the workspace root marker and the blueprint claim map.
-CONFIG = f"{NAME}.toml"
+CONFIG: str = f"{NAME}.toml"
 
 from .adversarial import (
     Rederivation,
@@ -20,7 +20,8 @@ from .blueprint import Blueprint, Claim
 from .certificate import Certificate
 from .engines import Capability, Engine, SearchError
 from .evidence import EvidenceStore
-from .roles import Role, RoleError, Status
+from .roles import Status
+from .settlement import SettleError
 from .workspace import Workspace, workspace
 from .zettel import Vault, Zettel
 
@@ -34,10 +35,9 @@ __all__ = [
     "Engine",
     "EvidenceStore",
     "Rederivation",
-    "Role",
-    "RoleError",
     "SearchError",
     "SeedSweep",
+    "SettleError",
     "Status",
     "Vault",
     "Workspace",

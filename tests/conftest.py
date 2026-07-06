@@ -1,12 +1,13 @@
 import json
 import stat
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Iterator
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
 from atpx.certificate import Certificate, short_hostname
-from atpx.engines import SearchEngine
+from atpx.engines import Capability, Engine, SearchEngine
 from atpx.roles import Status
 from atpx.workspace import Workspace
 
@@ -30,6 +31,11 @@ def zettel_text(
     if log is not None:
         sections += [f"## Log    (append-only: [who/tag YYYY-MM-DD] one line)\n{log}"]
     return "\n\n".join(sections) + "\n"
+
+
+def result_of(certificate: Certificate):
+    """The certificate result as plain parsed JSON, convenient to index in asserts."""
+    return json.loads(certificate.model_dump_json())["result"]
 
 
 def stamped(claim: str = "demo/ok", exit_status: int = 0) -> Certificate:
@@ -129,3 +135,24 @@ def fetcher(engine_name: str) -> Callable[[SearchEngine, str], Coroutine[None, N
         return reply(engine_name)
 
     return fetch
+
+
+@pytest.fixture
+def ghost_engine() -> Iterator[type[Engine]]:
+    """A registered engine whose module never exists, unenrolled again on teardown.
+
+    The cleanup keeps the registry enumeration tests (`Engine.supporting`)
+    order-independent: no other test ever sees the ghost.
+    """
+
+    class GhostEngine(Engine):
+        name = "ghost"
+        module: ClassVar[str] = "nosuch_module_anywhere"
+        distribution: ClassVar[str] = "nosuch-dist"
+        capability: ClassVar[Capability] = Capability.SEARCH
+
+        def execute(self, payload: str) -> str:
+            return payload
+
+    yield GhostEngine
+    Engine.registry_entries.remove(GhostEngine)

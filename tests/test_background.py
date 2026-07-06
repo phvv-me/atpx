@@ -78,6 +78,20 @@ def test_checks_ignore_certificates_for_other_claims(
     assert row["state"] == "pending"
 
 
+def test_checks_never_land_on_a_claim_sharing_a_prefix(
+    ws: tuple[Workspace, FakeRunner], echoing_chefe: Path
+) -> None:
+    """A certificate for `demo/okx` must not land the submission for `ok`."""
+    space, _ = ws
+    space.sync.check("demo", "ok", background=True)
+    shared = stamped(claim="demo/okx").model_copy(
+        update={"timestamp": "2099-01-01T00:00:00+00:00"}
+    )
+    EvidenceStore(space.blueprints / "demo").append(shared)
+    (row,) = space.checks("demo")
+    assert row["state"] == "pending"
+
+
 def test_checks_without_submissions_is_empty(ws: tuple[Workspace, FakeRunner]) -> None:
     space, _ = ws
     assert space.checks("demo") == []

@@ -28,6 +28,11 @@ filesystem state.
 3. **Filesystem.** Blueprint directories hold per-host append-only evidence ledgers
    at `evidence/<hostname>.json`, and vault zettels carry node status.
 
+The posture is capture first, tolerate the mess, gate on evidence. `run` wraps
+any command with zero ceremony, the readers never crash on malformed state,
+`doctor` reports what needs repair, and the settling transitions demand
+artifacts rather than trusting a claimed role.
+
 ## Install
 
 ```sh
@@ -42,50 +47,44 @@ uv tool install atpx   # or: pipx install atpx
 ## Use
 
 A workspace root is any directory whose `atpx.toml` declares a `[workspace]`
-table pointing at the blueprints directory and the zettel vault.
+table pointing at the blueprints directory and the zettel vault. Discovery
+walks up from the cwd, and the `ATPX_ROOT` environment variable overrides the
+walk, pinning every invocation to one workspace so a verb fired from anywhere
+in a monorepo cannot silently target whatever vault sits above the cwd. An
+explicit `root` argument still wins over the variable.
 
 ```sh
-atpx check <slug> <claim>      # run a blueprint claim, stamp + persist a certificate
+atpx run <slug> <claim> <command...>   # run anything: stamp, persist, auto-register
+atpx check <slug> <claim>      # re-run a registered claim, stamp + persist a certificate
 atpx check <slug> <claim> --background   # detach it, the child persists the certificate
 atpx checks <slug>             # background submissions, pending or landed
-atpx verify [<slug>]           # freshness sweep, re-run cheap claims, flag stale evidence
+atpx verify [<slug>]           # freshness sweep, re-run runnable claims, flag stale evidence
 atpx brief <slug>              # the full agent context bundle for one node, as markdown
 atpx judge_brief <slug>        # what changed since the last refuter judgment
-atpx status                    # nodes grouped by zettel status
-atpx graph                     # open nodes whose dependencies are all settled
+atpx status                    # nodes grouped by zettel status, malformed under `invalid`
+atpx graph                     # unsettled nodes whose dependencies are all settled
+atpx doctor                    # what needs repair, reported and never mutated
+atpx settle <zettel> <status>  # move a node's status, gated on evidence artifacts
+atpx lean <slug> [<target>]    # ingest a Lean build as evidence, auditing sorries and axioms
+atpx fit <data.csv> <target>   # PySR symbolic regression, certifying the Pareto front
 atpx recall "<query>"          # federated search, one certificate of hits per source
-atpx connect <slug>            # OEIS lookups for integer runs in the node's evidence
-atpx strategies                # close-rates by strategy tag over the append-only logs
-atpx lean_candidates           # sketched nodes ranked for formalization
-atpx log <zettel> <role> <tag> "message" --status sketched   # role-gated journal
+atpx log <zettel> <who> <tag> "message"   # append one plain journal line
 atpx index --write             # regenerate the results index note
-atpx compute <engine> <operation> <payload>                  # one typed engine op
-atpx prove "<goal>"            # try ATP engines in order, certify who closed it
-atpx cross_check <operation> <payload>   # same probe on independent engines
 ```
+
+`run` is capture-first. A new slug gets a blueprint directory and manifest, a
+new claim gets its command registered on first use, and the certificate always
+lands in the evidence ledger. The manifest is a record the tool maintains, not
+a form the agent fills. The command is a leading-hyphen var-positional, so
+`atpx run demo probe python -c "print(1)"` passes `-c` through verbatim. Put
+`--seed` and `--timeout` before the command tokens, and separate a command that
+itself takes those flags with `--`.
 
 Arguments are plain shell tokens under cyclopts, so a multi-word query needs
 only ordinary quoting, `atpx recall "Leech lattice"`, never the doubled
 quoting the old fire CLI required. Options follow their verb's signature
 (`--seed 7`, `--background`, `--sources oeis`), and `atpx --help` lists every
 verb with its parameters.
-
-Status transitions are enforced in code, not prose. Only a refuter sets
-`sketched` or `refuted` and only the formalizer sets `verified`.
-
-```python
-import atpx
-
-ws = atpx.workspace()
-
-# the I/O verbs are async, so they compose on one event loop
-certificate = await ws.check("voronoi-e8-codec", "bijectivity-m1")
-await ws.recall("196560, 16773120")   # the Leech theta series turns up OEIS A008408
-
-# synchronous scripts and one-liners block on them through the sync facade
-ws.sync.recall("196560, 16773120")
-ws.cross_check("evaluate", "exp(pi*sqrt(163))")   # CPU-bound verbs stay plain sync
-```
 
 A blueprint claim is either a bare command string or a table with `command` and
 `requires`. A claim whose requirement this host cannot meet, `requires = "cuda"`
@@ -101,15 +100,36 @@ command = "python {dir}/checks.py claim3"
 requires = "cuda"
 ```
 
+```python
+import atpx
+
+ws = atpx.workspace()
+
+# the I/O verbs are async, so they compose on one event loop
+certificate = await ws.run("voronoi-e8-codec", "bijectivity-m1", "python", "checks.py")
+await ws.recall("196560, 16773120")   # the Leech theta series turns up OEIS A008408
+
+# synchronous scripts and one-liners block on them through the sync facade
+ws.sync.recall("196560, 16773120")
+ws.status()   # the local readers stay plain sync
+```
+
 ## Recall
 
 `recall` fans one query out to every engine with the `search` capability and
-returns a single certificate listing the hits per source. A source that is
-unavailable or fails at run time becomes an entry under `errors` and the
-certificate exits nonzero, so a partial recall is never mistaken for a complete
-one. The network engines carry short timeouts and no API keys; loogle expects a
-Lean identifier or pattern such as `Real.sqrt _ * _` and reports plain-English
-queries as errors.
+returns a single certificate listing the hits per source. Five sources enroll:
+the vault (Zettelkasten search through `qmd` inside the chefe env, available
+only when the `chefe` binary is on PATH), OEIS by sequence values or words,
+loogle for mathlib declarations, arXiv full-field phrase search, and the
+zbMATH Open REST API. The web sources are keyless and carry short timeouts.
+
+An empty search is not a failure. zbMATH answers a no-result query with HTTP
+404 and loogle reports a query it cannot parse ("Unknown identifier ...")
+through its `error` field, since it only understands Lean identifiers and
+patterns such as `Real.sqrt _ * _`. Both come back as zero hits. Genuine
+transport failures, timeouts, connection errors, and 5xx still land under
+`errors` and the certificate exits nonzero, so a partial recall is never
+mistaken for a complete one.
 
 ## Loop mechanics
 
@@ -121,8 +141,8 @@ text, its dependency statuses from the wikilink walk, the per-host evidence
 summary with stale flags against the current git revision, the last refuter
 judgment verbatim, and the blueprint file list, all as markdown on stdout.
 
-`judge_brief <slug>` keeps re-judgment rounds cheap. Every refuter log line on
-a node with a blueprint snapshots the full node text into the blueprint's
+`judge_brief <slug>` keeps re-judgment rounds cheap. Settling a node with a
+blueprint to `sketched` snapshots the full node text into the blueprint's
 `judgments/` directory (a verbatim snapshot rather than a hash or git, since it
 needs no repository around the vault and always yields a real diff). The verb
 then prints the unified diff since that snapshot plus the claims whose
@@ -139,14 +159,56 @@ run (`requires`-gated claims it cannot meet are reported skipped), appends the
 fresh certificates, and flags claims whose latest prior certificate carries a
 git revision different from the tree now. Nothing is ever deleted.
 
-`strategies` aggregates the `[who/strategy date]` journal lines across all
-nodes into close-rates per strategy tag, and `lean_candidates` ranks sketched
-nodes by backlink count over statement length. Both are v1 tables built on
-documented heuristics, no learning and no scoring model.
+`status` and `graph` are tolerant readers. A zettel whose status field is
+malformed lands in the `invalid` bucket instead of crashing the read, and
+`doctor` is the matching lint: invalid statuses, stray evidence files,
+blueprint directories without a manifest, and nodes pointing at blueprints
+that do not exist. It reports and never mutates.
 
-`connect <slug>` extracts integer runs from the node's persisted certificate
-payloads and queries each through the OEIS search engine via `recall`, ambient
-conjecture generation under the same certificate discipline.
+`fit` is the symbolic-regression lane, PySR over a CSV artifact with a
+held-out split, certifying the Pareto front of equations and the holdout
+scores. The data path resolves cwd-first and then root-relative. The operator
+menu opens with repeated flags (`--unary exp --unary log`) or comma-joined
+tokens (`--unary exp,log`, `--binary "+,-,*"`), the comma form sidestepping
+flag parsing of a bare `-`, which otherwise needs `--binary=-`; PySR defaults
+hold when a menu is omitted, because a law the operators cannot express is
+only ever matched by an opaque rational. `--features rate,noise` restricts the
+fit to named columns when the CSV carries bookkeeping columns that would
+pollute the search. A random holdout does not predict extrapolation, so
+`--tail 0.1` holds out the fraction of rows with the largest values of the
+driver column instead, `--driver` naming it and defaulting to the first
+feature column. The certificate records the front, `holdout_r2` and
+`holdout_nmse` (`null` when the holdout target is constant), the `holdout`
+split (mode, fraction, driver), the `operators` menu, and the `features`
+actually used. pysr is not a dependency; without it the verb returns an
+honest nonzero certificate saying the lane is dormant.
+
+## Settling
+
+Status moves are gated on evidence artifacts rather than claimed roles. The
+free statuses (`open`, `in_progress`, `abandoned`, `known`) need none, with
+`known` marking a literature collision, a claim that is true but already in
+the record, distinct from `refuted` and never a novelty.
+
+```sh
+atpx settle <zettel> sketched --judgment <path>          # the recorded refuter ruling
+atpx settle <zettel> refuted --counterexample <claim>    # a persisted counterexample certificate
+atpx settle <zettel> verified --lean <claim>             # a clean Lean build certificate
+```
+
+`sketched` demands the judgment file the refuter recorded, `refuted` a
+counterexample certificate persisted in the node's blueprint ledgers, and
+`verified` a persisted Lean certificate that built cleanly with zero sorries
+and an empty `flagged` list. `atpx lean <slug>` produces that certificate by
+running the workspace's lean task (`lean-build` by default), counting sorries
+and scanning the output for the risky axiom markers `sorryAx`, `ofReduceBool`,
+`ofNat.lit`, `Lean.trustCompiler` and `native_decide`, recorded as `flagged`
+and forcing a nonzero exit when any appear; Lean interaction itself lives in
+lean-lsp-mcp, this verb only turns a build into the evidence `settle verified`
+demands.
+
+`log` appends one plain journal line, `- [who/tag date] message`, to a node's
+append-only log and never touches status. Status moves live in `settle`.
 
 ## Adversarial probes
 
@@ -177,12 +239,10 @@ matrix.
 atpx has no threads. The verbs with real I/O underneath are `async def` and
 compose on the caller's event loop. `recall` awaits every search source
 concurrently (`httpx.AsyncClient` for the web sources and an asyncio
-subprocess for the vault), `check` runs the claim command as an asyncio
-subprocess, `verify` re-runs claims with at most four in flight, and
-`connect` awaits `recall` per integer run. The purely local or CPU-bound
-verbs (`status`, `graph`, `brief`, `compute`, `prove`, `cross_check`, ...)
-stay plain sync; `cross_check` probes its in-process engines in a sequential
-loop on purpose, since there is no I/O for a loop to overlap.
+subprocess for the vault), `run`, `check`, and `lean` execute their commands
+as asyncio subprocesses, and `verify` re-runs claims with at most four in
+flight. The purely local or CPU-bound verbs (`status`, `graph`, `brief`,
+`doctor`, `settle`, `fit`, ...) stay plain sync.
 
 The CLI never exposes any of this, cyclopts owns the event loop and runs sync
 and async verbs alike. In Python, async code awaits the verbs directly and
@@ -191,59 +251,6 @@ can fan them out with `asyncio.gather`; synchronous scripts use the
 loop per call. Calling the facade from inside an already running loop fails
 with a clear error instead of a nested-loop crash, await the verb directly
 there.
-
-### Free threading (historical)
-
-Free-threaded CPython 3.14t was evaluated while these surfaces still ran on
-`ThreadPoolExecutor`. That question is now moot by design, since no
-shared-state parallelism remains anywhere in the package. The wheel matrix
-from the evaluation stays below as historical context. It was measured on
-`cpython-3.14.3+freethreaded` (macOS arm64, uv-managed, 2026-06).
-
-| dependency | free-threaded wheel | imports under `PYTHON_GIL=0` |
-| ------------- | ------------------- | ---------------------------- |
-| pydantic-core | yes | yes, GIL stays off |
-| z3-solver | yes | yes, GIL stays off |
-| python-flint | yes (0.8.0) | yes, GIL stays off |
-| cvc5 | **no** (through 1.3.4, `cp38`-`cp314` only) | n/a |
-| sympy, mpmath, httpx, fire, plumbum, patos | yes | yes |
-
-At the time, `uv pip install atpx` on 3.14t failed to resolve because of
-cvc5, while with cvc5 stubbed out 130 of the 132 tests passed under
-`PYTHON_GIL=0`. The package was already free-threading clean and the threads
-have since been removed entirely. Standard CPython 3.14 is the supported
-runtime.
-
-## Engines
-
-Engines self-register through a typed registry and stamp their name and version
-into every certificate. Each declares one capability.
-
-| engine  | capability  | availability                                  |
-| ------- | ----------- | --------------------------------------------- |
-| sympy   | evaluate    | always (hard dependency)                       |
-| mpmath  | evaluate    | always (hard dependency)                       |
-| flint   | factor      | always (hard dependency, python-flint)         |
-| pari    | factor      | linux only, and only when cypari2 is installed |
-| z3      | solve-smt   | always (hard dependency, z3-solver)            |
-| cvc5    | solve-smt   | always (hard dependency)                       |
-| eprover | prove-tptp  | only when the `eprover` binary is on PATH      |
-| vampire | prove-tptp  | only when the `vampire` binary is on PATH      |
-| vault   | search      | only when the `chefe` binary is on PATH        |
-| oeis    | search      | always, network EAFP at run time               |
-| loogle  | search      | always, network EAFP at run time               |
-| arxiv   | search      | always, network EAFP at run time               |
-| zbmath  | search      | always, network EAFP at run time               |
-
-cypari2 is not a dependency because its wheel only installs cleanly on linux
-x86-64, so the pari engine reports unavailable everywhere else. The two
-first-order provers are subprocess engines and never Python dependencies.
-
-The vault engine searches the Zettelkasten through `qmd search` inside the
-chefe env, the no-LLM BM25 surface, so recall never waits on a model download.
-The four web sources are keyless: OEIS by sequence values or words, loogle for
-mathlib declarations, arXiv full-field phrase search, and the zbMATH Open REST
-API, which answers without a key.
 
 ## Documentation
 

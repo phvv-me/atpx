@@ -16,6 +16,7 @@ HEADINGS = {
     Status.IN_PROGRESS: "## In progress / open",
     Status.OPEN: "## In progress / open",
     Status.REFUTED: "## Refuted",
+    Status.KNOWN: "## Known (already in the literature)",
     Status.ABANDONED: "## Abandoned",
 }
 
