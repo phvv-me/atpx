@@ -36,6 +36,15 @@ dependencies = [
   "plumbum>=2",
   "python-flint>=0.8",
   "httpx>=0.28",
+  "tomlkit>=0.13",
+  "filelock>=3.20",
+  # Capped below 3: the 3.x client builds its transport on `httpx2`, a different
+  # distribution from the `httpx` respx patches, so every consultation test silently
+  # reaches the live API instead of the mock and the counsel lane loses its coverage.
+  # Lift the cap once respx (or a replacement) can intercept httpx2.
+  "openai>=2.45,<3",
+  "rapidfuzz>=3.14",
+  "python-slugify>=8.0.4",
 ]
 
 [project.optional-dependencies]
@@ -53,7 +62,7 @@ dev = [
   "faker>=30",
   "dirty-equals>=0.8",
 ]
-docs = ["mkdocs-material>=9.5", "mkdocs-static-i18n>=1.2"]
+docs = ["mkdocs-material>=9.5"]
 
 [project.scripts]
 atpx = "atpx.cli:main"
@@ -67,18 +76,27 @@ Issues = "https://github.com/phvv-me/atpx/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/atpx"]
 
+[tool.mcmr.contextual]
+backend = "openrouter"
+model = "openai/gpt-5.6-terra"
+batch_size = 8
+
+# `Workspace` composes CheckVerbs, StudyVerbs, and CounselVerbs, and CounselVerbs
+# itself composes seven single-verb mixins (fit, lean, prove, recall, refute,
+# scaffold, settle) over the shared `FoundationState` (an ABC, adding `abc.ABC`
+# itself as one more counted ancestor). The rule's own docstring calls the
+# ceiling a project decision: 12 is the exact width of atpx's verb surface
+# today, decomposed into one mixin per verb rather than a bloated class, so
+# the ceiling tracks that count instead of masking further growth.
+[tool.mcmr.rules."ALL-CLAS0005"]
+policy = { kind = "numeric", maximum = 12 }
+
 [tool.ruff]
 line-length = 99
 target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-
-# The package __init__ binds NAME and CONFIG before its re-exports on purpose:
-# submodules import them while the package is still initializing, so the
-# constants must come first and E402 cannot hold for that one file.
-[tool.ruff.lint.per-file-ignores]
-"src/atpx/__init__.py" = ["E402"]
 
 [tool.pyrefly]
 project-includes = ["src", "tests"]
@@ -104,20 +122,26 @@ ignore_missing_imports = true
 # still guards everything else.
 [[tool.mypy.overrides]]
 module = [
-  "atpx.base",
-  "atpx.certificate",
-  "atpx.blueprint",
-  "atpx.discovery",
-  "atpx.settlement",
-  "atpx.zettel",
-  "atpx.briefing",
-  "atpx.background",
-  "atpx.adversarial",
+  "atpx.core.*",
+  "atpx.running.*",
+  "atpx.blueprint.*",
+  "atpx.discovery.*",
+  "atpx.settlement.*",
+  "atpx.graph.*",
+  "atpx.briefing.*",
+  "atpx.background.*",
+  "atpx.adversarial.*",
+  "atpx.models.*",
+  "atpx.counsel.*",
 ]
 disable_error_code = ["explicit-any"]
 
 [tool.pytest.ini_options]
-addopts = "-q -ra --strict-markers -m 'not integration' --cov=atpx --cov-report=term-missing"
+addopts = "-q -ra --import-mode=importlib -m 'not integration' --cov=atpx --cov-report=term-missing"
+strict_config = true
+strict_markers = true
+strict_parametrization_ids = true
+strict_xfail = true
 testpaths = ["tests"]
 markers = ["integration: hits live external services, deselected by default"]
 
@@ -129,9 +153,5 @@ branch = true
 show_missing = true
 fail_under = 100
 exclude_lines = [
-  "pragma: no cover",
-  "raise NotImplementedError",
-  "if TYPE_CHECKING:",
-  "if __name__ == .__main__.:",
-  "\\.\\.\\.",
+  "pragma: no cover|if TYPE_CHECKING:|if __name__ == .__main__.:|\\.\\.\\.",
 ]

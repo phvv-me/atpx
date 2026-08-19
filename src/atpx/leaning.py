@@ -2,12 +2,13 @@ from importlib.metadata import version as package_version
 
 from pydantic import JsonValue
 
-from . import NAME
-from .certificate import Certificate
-from .running import Running
+from .core.certificate import Certificate
+from .running.execution import Running
+from .running.payload import clipped
+from .support.naming import Naming
 
-SORRY_MARKER = "sorry"
-RISKY_AXIOMS = ("sorryAx", "ofReduceBool", "ofNat.lit", "Lean.trustCompiler", "native_decide")
+_SORRY_MARKER = "sorry"
+_RISKY_AXIOMS = ("sorryAx", "ofReduceBool", "ofNat.lit", "Lean.trustCompiler", "native_decide")
 
 
 class LeanAudit:
@@ -15,15 +16,14 @@ class LeanAudit:
 
     Lean interaction lives in lean-lsp-mcp; this audit only runs the
     workspace's lean task, counts sorries, and scans the output for the risky
-    axiom markers in `RISKY_AXIOMS`, recording the found subset as `flagged`.
-    Exit is clean only when the build passes with zero sorries and nothing
-    flagged.
+    axiom markers, recording the found subset as `flagged`. Exit is clean only
+    when the build passes with zero sorries and nothing flagged.
     """
 
     def __init__(self, running: Running, task: str) -> None:
         """running: the command execution seam.
 
-        task: the chefe task that runs the Lean build.
+        task: the workspace task that runs the Lean build.
         """
         self.running = running
         self.task = task
@@ -37,13 +37,14 @@ class LeanAudit:
         """
         argv = [self.task] + ([target] if target else [])
         exit_status, output = await self.running.bounded(argv, timeout)
-        sorries = output.count(SORRY_MARKER)
-        flagged: list[JsonValue] = [marker for marker in RISKY_AXIOMS if marker in output]
+        sorries = output.count(_SORRY_MARKER)
+        flagged: list[JsonValue] = [marker for marker in _RISKY_AXIOMS if marker in output]
         return Certificate.stamp(
             claim=f"{slug}/lean {target or ''}".strip(),
-            result={"sorries": sorries, "flagged": flagged, "output": output.strip()[-2000:]},
+            result={"sorries": sorries, "flagged": flagged, "output": clipped(output.strip())},
             engine="lean",
-            engine_version=package_version(NAME),
+            engine_version=package_version(Naming.NAME),
             exit_status=exit_status if exit_status else (1 if sorries or flagged else 0),
+            rigor="lean",
             root=self.running.root,
         )

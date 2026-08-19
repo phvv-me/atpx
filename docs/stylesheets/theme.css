@@ -1,0 +1,199 @@
+/* atpx docs theme: a math textbook, not a product site.
+   Monochrome, serif, flat. atpx deliberately does not use the shared
+   Space Grotesk / colored-accent brand.css other house packages share,
+   since a mathematics workbench reads better set like a printed text. */
+
+:root {
+  --ink: #111111;
+  --soft: #55565c;
+  --line: #d8d8d8;
+  --paper: #ffffff;
+  --tint: #f7f7f5;
+}
+
+[data-md-color-scheme="slate"] {
+  --ink: #e8e6e1;
+  --soft: #a6a49d;
+  --line: #3a3a3a;
+  --paper: #141413;
+  --tint: #1c1c1b;
+}
+
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--paper);
+  --md-primary-fg-color--light: var(--paper);
+  --md-primary-fg-color--dark: var(--paper);
+  --md-primary-bg-color: var(--ink);
+  --md-primary-bg-color--light: var(--ink);
+  --md-default-fg-color: var(--ink);
+  --md-default-fg-color--light: var(--soft);
+  --md-default-fg-color--lighter: var(--line);
+  --md-default-bg-color: var(--paper);
+  --md-code-bg-color: var(--tint);
+  --md-code-fg-color: var(--ink);
+  --md-accent-fg-color: var(--ink);
+  --md-typeset-a-color: var(--ink);
+  --md-footer-bg-color: var(--ink);
+  --md-footer-fg-color: var(--paper);
+  --md-footer-bg-color--dark: var(--ink);
+  --md-mermaid-node-bg-color: var(--tint);
+  --md-mermaid-node-fg-color: var(--ink);
+  --md-mermaid-edge-color: var(--soft);
+  --md-mermaid-label-bg-color: var(--paper);
+  --md-mermaid-label-fg-color: var(--ink);
+  --md-shadow-z1: none;
+  --md-shadow-z2: none;
+  --md-shadow-z3: none;
+}
+
+.md-header {
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.md-header__title,
+.md-tabs {
+  font-family: "STIX Two Text", Georgia, serif;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+.md-nav__title,
+.md-nav__link {
+  font-family: "STIX Two Text", Georgia, serif;
+}
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: var(--ink);
+}
+
+/* body measure and rhythm, set like a page rather than a web app panel */
+.md-typeset {
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  font-family: "STIX Two Text", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.md-typeset h1 {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.md-typeset h2 {
+  margin-top: 2.2rem;
+}
+
+/* links read like print: underlined ink, no color shift */
+.md-typeset a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 0.15em;
+}
+
+.md-typeset a:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* flat surfaces everywhere: no radius, no elevation */
+.md-typeset pre > code,
+.md-typeset code,
+.md-typeset .admonition,
+.md-typeset details,
+.md-typeset table:not([class]),
+.md-typeset img,
+.md-search__form,
+.md-search-result__item {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.md-typeset pre > code {
+  border: 1px solid var(--line);
+}
+
+.md-typeset code {
+  background-color: var(--tint);
+}
+
+/* admonitions: a thin rule, not a colored panel */
+.md-typeset .admonition,
+.md-typeset details {
+  border: none;
+  border-left: 3px solid var(--ink);
+  background-color: var(--tint);
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background-color: transparent;
+  font-family: "STIX Two Text", Georgia, serif;
+}
+
+.md-typeset .admonition-title::before,
+.md-typeset summary::before {
+  background-color: var(--ink);
+}
+
+/* tables set like a printed book: rules top/bottom, no grid, no stripes */
+.md-typeset table:not([class]) {
+  border: none;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.md-typeset table:not([class]) th {
+  border-bottom: 1px solid var(--ink);
+  font-family: "STIX Two Text", Georgia, serif;
+}
+
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-left: none;
+  border-right: none;
+}
+
+.md-typeset table:not([class]) tr {
+  border-top: 1px solid var(--line);
+  background-color: transparent;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background-color: var(--tint);
+}
+
+.md-typeset .mermaid {
+  text-align: center;
+}
+
+.md-footer {
+  box-shadow: none;
+}
+
+.md-footer-meta {
+  background-color: var(--ink);
+}
+
+/* KaTeX display blocks get the same book measure as prose */
+.md-typeset .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2rem 0;
+}

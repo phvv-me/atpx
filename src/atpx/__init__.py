@@ -1,48 +1,72 @@
-# The package name *is* the project name (the build maps pyproject -> this package),
-# so a rename is a single move of the `src/atpx` folder. Every self-reference
-# derives from it; reading pyproject.toml at runtime would be fragile (it isn't
-# in the wheel). The constants precede the re-exports so submodules can import
-# them while the package is still initializing.
-NAME: str = __name__
-
-# The manifest a user writes, both the workspace root marker and the blueprint claim map.
-CONFIG: str = f"{NAME}.toml"
-
-from .adversarial import (
-    Rederivation,
-    SeedSweep,
-    boundary_ties,
-    precision_tilt,
-    rederive,
-    seed_sensitivity,
-)
-from .blueprint import Blueprint, Claim
-from .certificate import Certificate
+from .adversarial.lattice import boundary_ties, precision_tilt
+from .adversarial.rederiving import Rederivation, rederive
+from .adversarial.sweep import SeedSweep, seed_sensitivity
+from .blueprint.claim import Claim
+from .blueprint.manifest import Blueprint
+from .core.certificate import Certificate
+from .core.evidence import EvidenceStore
+from .counsel.consulting.openrouter import consult
+from .counsel.probing import gate
+from .counsel.prover import Prover
+from .counsel.records.attempt import Attempt
+from .counsel.records.referral import Referral
+from .counsel.refuter import Refuter
 from .engines import Capability, Engine, SearchError
-from .evidence import EvidenceStore
-from .roles import Status
-from .settlement import SettleError
-from .workspace import Workspace, workspace
-from .zettel import Vault, Zettel
+from .graph.kind import Kind
+from .graph.node import Node
+from .graph.status import Status
+from .graph.store import NodeStore
+from .models.consultation import Consultation
+from .models.lane import ModelLane
+from .models.lanes import Lanes
+from .rigor.witness import is_ball_witness
+from .settlement.exceptions import SettleError
+from .support.naming import Naming
+from .workspace.verbs import Workspace, workspace
+
+
+def __getattr__(name: str) -> str:
+    """Resolve `NAME` and `CONFIG` from `Naming` lazily, PEP 562 style.
+
+    Neither is a constant this module owns: both mirror `Naming`, the class
+    that actually states them, so a module-level assignment would just be a
+    second, driftable spelling of the same value.
+    """
+    if name in {"NAME", "CONFIG"}:
+        return str(getattr(Naming, name))
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "CONFIG",
     "NAME",
+    "Attempt",
     "Blueprint",
     "Capability",
     "Certificate",
     "Claim",
+    "Consultation",
     "Engine",
     "EvidenceStore",
+    "Kind",
+    "Lanes",
+    "ModelLane",
+    "Naming",
+    "Node",
+    "NodeStore",
+    "Prover",
     "Rederivation",
+    "Referral",
+    "Refuter",
     "SearchError",
     "SeedSweep",
     "SettleError",
     "Status",
-    "Vault",
     "Workspace",
-    "Zettel",
     "boundary_ties",
+    "consult",
+    "gate",
+    "is_ball_witness",
     "precision_tilt",
     "rederive",
     "seed_sensitivity",

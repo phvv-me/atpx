@@ -8,6 +8,25 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ### Added
 
+- `--project <path>` on every CLI invocation, pinning one run to a named
+  workspace (its root or any directory inside it). The answer to a monorepo
+  task runner that changes into the repository root before running anything,
+  where the upward walk would otherwise always land on the top workspace.
+- `lab`, the verb for a claim whose verification is an experiment rather than
+  a script. The command prints one `{"mainboard_receipt": {...}}` JSON line
+  per trial, carrying its content-addressed `run_id`, its outcome, and every
+  declared gate's verdict; the gate demands at least one line and every trial
+  through its gates, stamps rigor `lab`, and keeps the receipts in the
+  certificate's witness list. Re-verification is the same verb with no
+  command, replaying what the manifest recorded. Rigor `lab` is evidence with
+  an identity, not a proof, and `settle validated` keeps refusing it.
+- `[workspace] runner`, a command prefix every claim, background check, and
+  Lean build runs behind (`mainboard run --`, say). Empty by default, so a
+  plain checkout runs claims on the interpreter already around atpx.
+- `doctor` gains three evidence lints: `failing_claims` (newest certificate
+  exited nonzero), `unevidenced_claims` (declared but never certified), and
+  `stale_claims` (evidence stamped before the last commit that changed the
+  node it supports).
 - `ATPX_ROOT` environment override for workspace discovery: when set, every
   invocation pins to that root instead of walking up from the cwd, so verbs
   fired from anywhere in a monorepo cannot silently target the wrong vault.
@@ -18,6 +37,23 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   resolution (root-relative second).
 
 ### Changed
+
+- `doctor` returns a certificate instead of a plain report, and covers the
+  resolved workspace plus every workspace nested inside it in one pass. The
+  payload is `{"breakages": [...], "workspaces": {"<path>": {...}}}` and the
+  exit is nonzero when any finding contradicts what a workspace asserts;
+  untidiness the capture-first posture tolerates still reports and never
+  gates.
+- A verb's failing certificate now sets the process exit code, so `doctor`,
+  `verify`, `ball`, `smt`, and `lab` gate a pipeline without anyone parsing
+  their JSON. `hunt` keeps its documented inversion.
+- Opening a workspace touches no filesystem until a verb needs it, so
+  `atpx --help` answers from a directory holding no workspace at all.
+- `{dir}` in a claim command expands to the node directory's full path rather
+  than a workspace-relative one, since the declared launcher decides which
+  directory a claim actually runs from.
+- The default runner is a plain subprocess behind the declared launcher,
+  replacing the hardcoded `chefe run` shell-out.
 
 - Internal restructure: `workspace.py` is now a thin facade over service
   modules, `running` (capture-first execution, freshness sweep),
