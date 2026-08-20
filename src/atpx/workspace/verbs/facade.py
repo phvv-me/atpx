@@ -75,9 +75,10 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     def launcher(self) -> Sequence[str]:
         """The `[workspace] runner` command prefix every claim and background check runs behind.
 
-        A monorepo declares its environment tool here (`mainboard run --`) so a claim
-        command in a node manifest stays the bare command it is, and a plain checkout
-        declares nothing and runs claims on the interpreter already around atpx.
+        A monorepo declares its own environment tool here, so a claim command in a node
+        manifest stays the bare command it is and the workspace decides what it runs
+        inside. A plain checkout declares nothing and runs claims on the interpreter
+        already around atpx.
         """
         return shlex.split(str(self.config.get("runner", "")))
 

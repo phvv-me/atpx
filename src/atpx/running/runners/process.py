@@ -10,9 +10,9 @@ class ProcessRunner(FrozenModel):
     """Runs claim commands as subprocesses from the workspace root, behind an optional launcher.
 
     The launcher is whatever the workspace declares as `[workspace] runner`, a command
-    prefix such as `mainboard run --` that puts every claim inside the workspace's own
-    provisioned environment. Empty by default, so a plain checkout runs its claims on
-    the interpreter already activated around atpx and needs no other tool installed.
+    prefix that puts every claim inside the environment that workspace provisions for
+    itself. Empty by default, so a plain checkout runs its claims on the interpreter
+    already activated around atpx and needs no other tool installed.
 
     root: the workspace root commands run from.
     launcher: the prefix tokens every claim command is handed to.

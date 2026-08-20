@@ -61,7 +61,7 @@ environment it lands in:
 ```toml
 [workspace]
 blueprints = "research/math"
-runner = "mainboard run --"   # empty by default: run the command as written
+runner = "uv run --"   # your environment tool; empty by default: run the command as written
 ```
 
 ```sh

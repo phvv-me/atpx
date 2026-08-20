@@ -102,8 +102,8 @@ class Blueprint(FrozenModel):
         """The argv for one claim, with `{dir}` expanded to the blueprint directory's full path.
 
         Absolute rather than workspace-relative, because the launcher a workspace declares
-        decides the working directory a claim actually runs from (`mainboard run` changes
-        into its own workspace root, which in a monorepo sits above a nested atpx
+        decides the working directory a claim actually runs from (an environment runner
+        changes into its own workspace root, which in a monorepo sits above a nested atpx
         workspace), and only a full path survives that. The template stored in `atpx.toml`
         stays machine-independent; the expansion is per-run.
 

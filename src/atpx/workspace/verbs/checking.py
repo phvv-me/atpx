@@ -142,11 +142,12 @@ class CheckVerbs(FoundationState):
         """Run exactly like `run` but gate on experiment trial receipts, stamping rigor `lab`.
 
         The verb for a claim whose verification is an experiment rather than a script. The
-        command drives a mainboard study and prints one `mainboard_receipt` JSON line per
-        trial; the gate demands at least one line and every trial through its declared
-        gates. Each receipt lands in the certificate's witness list, so the evidence names
-        the content-addressed `run_id` that produced it and re-verification is this same
-        verb with no command at all, replaying what the manifest recorded.
+        command drives a study on whatever harness the workspace uses and prints one
+        `trial_receipt` JSON line per trial; the gate demands at least one line and every
+        trial through its declared gates. Each receipt lands in the certificate's witness
+        list, so the evidence names the content-addressed `run_id` that produced it and
+        re-verification is this same verb with no command at all, replaying what the
+        manifest recorded.
 
         Rigor `lab` is evidence with an identity, not a proof, and the `validated` settle
         gate keeps refusing it exactly as it refuses `sampled`.

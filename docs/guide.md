@@ -35,12 +35,13 @@ answer from any directory at all.
 ## Choosing how claims run
 
 A claim command in a node's manifest is a bare command. Which environment it
-lands in is one line in the workspace manifest:
+lands in is one line in the workspace manifest, naming whatever environment
+tool that workspace already uses:
 
 ```toml
 [workspace]
 blueprints = "research/math"
-runner = "mainboard run --"
+runner = "uv run --"
 ```
 
 Every claim, background check, and Lean build then runs behind that prefix.
@@ -121,11 +122,13 @@ atpx lab scale-invariance sigma-sweep -- python probes/study.py
 atpx lab scale-invariance sigma-sweep          # re-verify, replaying the registered command
 ```
 
-The contract is one JSON line per trial, `{"mainboard_receipt": {...}}`,
-carrying the trial's content-addressed `run_id`, its `outcome`, and every
-declared gate's verdict. The gate demands at least one line and every trial
-through its gates, then stamps rigor `lab` and keeps each receipt in the
-certificate's witness list, so the evidence names the run that produced it.
+The contract is one JSON line per trial, `{"trial_receipt": {...}}`, carrying
+the trial's content-addressed `run_id`, its `outcome`, the `producer` that
+stamped it, and every declared gate's verdict. It names the shape rather than
+any one framework, so any harness that prints that line is audited here. The
+gate demands at least one line and every trial through its gates, then stamps
+rigor `lab` and keeps each receipt in the certificate's witness list, so the
+evidence names the run that produced it.
 A trial a gate withheld fails the gate here, since a withheld trial is not a
 checked claim, and the violation line carries the study's own reason.
 

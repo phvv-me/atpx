@@ -30,12 +30,13 @@ def smt_line(name: str = "m2-forcing", *, result: str = "unsat") -> str:
 def receipt_line(
     run_id: str = "9d3c1a77b2e40f5b", *, outcome: str = "passed", reason: str = ""
 ) -> str:
-    """One printed trial receipt, exactly as a mainboard study emits it."""
+    """One printed trial receipt, exactly as an experiment harness emits it."""
     return json.dumps(
         {
-            "mainboard_receipt": {
+            "trial_receipt": {
                 "run_id": run_id,
                 "outcome": outcome,
+                "producer": "some-harness",
                 "gates": [{"status": outcome, "reason": reason}],
                 "reason": reason,
             }
@@ -109,7 +110,7 @@ def test_lab_audit_passes_when_every_printed_trial_cleared_its_gates() -> None:
 
 
 def test_lab_audit_refuses_output_carrying_no_receipt_at_all() -> None:
-    assert LabAudit().violation("ran fine\n") == "no mainboard_receipt line printed"
+    assert LabAudit().violation("ran fine\n") == "no trial_receipt line printed"
 
 
 @pytest.mark.parametrize("outcome", ["blocked", "failed"])

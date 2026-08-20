@@ -13,16 +13,18 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   task runner that changes into the repository root before running anything,
   where the upward walk would otherwise always land on the top workspace.
 - `lab`, the verb for a claim whose verification is an experiment rather than
-  a script. The command prints one `{"mainboard_receipt": {...}}` JSON line
-  per trial, carrying its content-addressed `run_id`, its outcome, and every
-  declared gate's verdict; the gate demands at least one line and every trial
-  through its gates, stamps rigor `lab`, and keeps the receipts in the
-  certificate's witness list. Re-verification is the same verb with no
-  command, replaying what the manifest recorded. Rigor `lab` is evidence with
-  an identity, not a proof, and `settle validated` keeps refusing it.
+  a script. The command prints one `{"trial_receipt": {...}}` JSON line per
+  trial, carrying its content-addressed `run_id`, its outcome, the `producer`
+  that stamped it, and every declared gate's verdict; the gate demands at
+  least one line and every trial through its gates, stamps rigor `lab`, and
+  keeps the receipts in the certificate's witness list. The key names the
+  shape rather than a framework, so any experiment harness that prints it is
+  audited the same way. Re-verification is the same verb with no command,
+  replaying what the manifest recorded. Rigor `lab` is evidence with an
+  identity, not a proof, and `settle validated` keeps refusing it.
 - `[workspace] runner`, a command prefix every claim, background check, and
-  Lean build runs behind (`mainboard run --`, say). Empty by default, so a
-  plain checkout runs claims on the interpreter already around atpx.
+  Lean build runs behind (`uv run --`, say). Empty by default, so a plain
+  checkout runs claims on the interpreter already around atpx.
 - `doctor` gains three evidence lints: `failing_claims` (newest certificate
   exited nonzero), `unevidenced_claims` (declared but never certified), and
   `stale_claims` (evidence stamped before the last commit that changed the
