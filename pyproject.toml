@@ -42,7 +42,7 @@ dependencies = [
   # distribution from the `httpx` respx patches, so every consultation test silently
   # reaches the live API instead of the mock and the counsel lane loses its coverage.
   # Lift the cap once respx (or a replacement) can intercept httpx2.
-  "openai>=2.45,<3",
+  "openai>=2.45,<4",
   "rapidfuzz>=3.14",
   "python-slugify>=8.0.4",
 ]
