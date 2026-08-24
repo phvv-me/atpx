@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
-
 from patos import FrozenModel
 from pydantic import ConfigDict, Field, field_validator
+
+from ..support.clock import today
 
 
 class LogEntry(FrozenModel):
@@ -41,4 +41,4 @@ class LogEntry(FrozenModel):
         tag: the strategy or pass tag inside the brackets.
         message: the one-line entry body.
         """
-        return cls(who=who, tag=tag, date=datetime.now(UTC).date().isoformat(), message=message)
+        return cls(who=who, tag=tag, date=today(), message=message)

@@ -91,11 +91,15 @@ def test_links_are_unique_and_ordered() -> None:
 
 
 def test_relations_parse_from_flat_frontmatter_keys() -> None:
-    text = (
-        "---\nstatus: open\ndate: 2026-08-15\n"
-        "successor_of: response-share-form\n"
-        "shadows: width-law, form\n---\n\n# N\n"
-    )
+    text = """---
+status: open
+date: 2026-08-15
+successor_of: response-share-form
+shadows: width-law, form
+---
+
+# N
+"""
     node = written(text)
     assert node.relations == {
         "successor_of": ["response-share-form"],

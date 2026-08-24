@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from importlib.metadata import version as package_version
 from pathlib import Path
 from subprocess import DEVNULL, STDOUT, Popen
@@ -7,6 +6,7 @@ from subprocess import DEVNULL, STDOUT, Popen
 from ..blueprint.manifest import Blueprint
 from ..core.certificate import Certificate
 from ..core.evidence import EvidenceStore
+from ..support.clock import compact, moment, stamp
 from ..support.naming import Naming
 from .submission import Submission
 
@@ -61,8 +61,8 @@ class BackgroundChecks:
         claim: the claim name declared in the blueprint manifest.
         """
         self.blueprint.claim(claim)
-        submitted = datetime.now(UTC)
-        stem = f"{claim}-{submitted.strftime('%Y%m%dT%H%M%S%f')}"
+        submitted = moment()
+        stem = f"{claim}-{compact(submitted)}"
         self.directory.mkdir(parents=True, exist_ok=True)
         log = self.directory / f"{stem}.log"
         argv = [*self.launcher, Naming.NAME, "check", self.blueprint.slug, claim]
@@ -75,7 +75,7 @@ class BackgroundChecks:
                 stderr=STDOUT,
                 start_new_session=True,
             )
-        record = Submission(claim=claim, submitted=submitted.isoformat(), pid=process.pid)
+        record = Submission(claim=claim, submitted=stamp(submitted), pid=process.pid)
         (self.directory / f"{stem}.json").write_text(record.model_dump_json(indent=2) + "\n")
         return Certificate.stamp(
             claim=f"{self.blueprint.slug}/{claim}",

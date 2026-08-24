@@ -25,6 +25,21 @@ class Discovery:
         """root: the workspace root data paths resolve against second."""
         self.root = root
 
+    @staticmethod
+    def holdout(
+        columns: Sequence[str], *, seed: int, tail: float | None, driver: str | None
+    ) -> RandomHoldout | TailHoldout:
+        """The split policy the run scores against, a tail carve only when one is asked for.
+
+        columns: the feature columns, whose first names the default driver.
+        seed: the seed a random split reproduces from.
+        tail: the fraction held out by largest driver value, None for a random split.
+        driver: the column ranking a tail holdout, the first feature by default.
+        """
+        if tail is None:
+            return RandomHoldout(seed=seed)
+        return TailHoldout(fraction=tail, driver=driver or columns[0])
+
     def dormant(self, data: str, seed: int) -> Certificate:
         """The honest nonzero certificate when pysr is not installed."""
         return Certificate.stamp(
@@ -72,14 +87,8 @@ class Discovery:
             )
         except ImportError:
             return self.dormant(data, seed)
-        pandas = import_module("pandas")
-        frame: Frame = pandas.read_csv(self.located(data))
-        columns = commas(features) or [name for name in frame.columns if name != target]
-        holdout_policy: RandomHoldout | TailHoldout = (
-            TailHoldout(fraction=tail, driver=driver or columns[0])
-            if tail is not None
-            else RandomHoldout(seed=seed)
-        )
+        frame, columns = self.framed(data, target=target, features=features)
+        holdout_policy = self.holdout(columns, seed=seed, tail=tail, driver=driver)
         train, holdout = holdout_policy.carve(frame)
         regressor.fit(train[columns], train[target])
         return Certificate.stamp(
@@ -98,6 +107,22 @@ class Discovery:
             seed=seed,
             root=self.root,
         )
+
+    def framed(
+        self, data: str, *, target: str, features: Sequence[str] | None
+    ) -> tuple[Frame, list[str]]:
+        """The CSV as a frame beside the feature columns the fit will read.
+
+        pandas is imported here rather than at module scope so the lane stays
+        dormant, not broken, on a checkout that never installed it.
+
+        data: path to a CSV, resolved cwd-first and then root-relative.
+        target: the column being fitted, never a feature.
+        features: the columns to restrict to, every other column when omitted.
+        """
+        pandas = import_module("pandas")
+        frame: Frame = pandas.read_csv(self.located(data))
+        return frame, commas(features) or [name for name in frame.columns if name != target]
 
     def located(self, data: str) -> Path:
         """The data artifact, resolved cwd-first and then workspace-root-relative.

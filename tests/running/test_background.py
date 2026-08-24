@@ -63,7 +63,8 @@ def test_checks_reports_pending_then_landed(space: Workspace, echoing_atpx: Path
     space.sync.check("demo", "ok", background=True)
     (pending,) = space.checks("demo")
     assert pending["claim"] == "ok" and pending["state"] == "pending"
-    landed = stamped(claim="demo/ok").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
+    future = {"timestamp": "2099-01-01T00:00:00.000000Z"}
+    landed = stamped(claim="demo/ok").model_copy(update=future)
     EvidenceStore(space.blueprints / "demo").append(landed)
     (row,) = space.checks("demo")
     assert row["state"] == "landed" and row["submitted"] == pending["submitted"]
@@ -71,7 +72,8 @@ def test_checks_reports_pending_then_landed(space: Workspace, echoing_atpx: Path
 
 def test_checks_ignore_certificates_for_other_claims(space: Workspace, echoing_atpx: Path) -> None:
     space.sync.check("demo", "ok", background=True)
-    other = stamped(claim="demo/gpu").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
+    future = {"timestamp": "2099-01-01T00:00:00.000000Z"}
+    other = stamped(claim="demo/gpu").model_copy(update=future)
     EvidenceStore(space.blueprints / "demo").append(other)
     (row,) = space.checks("demo")
     assert row["state"] == "pending"
@@ -83,7 +85,7 @@ def test_checks_never_land_on_a_claim_sharing_a_prefix(
     """A certificate for `demo/okx` must not land the submission for `ok`."""
     space.sync.check("demo", "ok", background=True)
     shared = stamped(claim="demo/okx").model_copy(
-        update={"timestamp": "2099-01-01T00:00:00+00:00"}
+        update={"timestamp": "2099-01-01T00:00:00.000000Z"}
     )
     EvidenceStore(space.blueprints / "demo").append(shared)
     (row,) = space.checks("demo")
@@ -95,6 +97,7 @@ def test_checks_without_submissions_is_empty(space: Workspace) -> None:
 
 
 def test_submission_records_are_plain_json() -> None:
-    record = Submission(claim="ok", submitted="2026-06-12T00:00:00+00:00", pid=os.getpid())
+    record = Submission(claim="ok", submitted="2026-06-12T00:00:00.000000Z", pid=os.getpid())
     parsed = json.loads(record.model_dump_json())
-    assert parsed == {"claim": "ok", "submitted": "2026-06-12T00:00:00+00:00", "pid": os.getpid()}
+    stamp = "2026-06-12T00:00:00.000000Z"
+    assert parsed == {"claim": "ok", "submitted": stamp, "pid": os.getpid()}

@@ -51,7 +51,6 @@ __all__ = [
     "Kind",
     "Lanes",
     "ModelLane",
-    "Naming",
     "Node",
     "NodeStore",
     "Prover",

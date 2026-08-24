@@ -1,7 +1,10 @@
+from collections.abc import Mapping
 from pathlib import Path
 
 from .node import Node
 from .status import Status
+
+type Row = dict[str, str | dict[str, str] | dict[str, list[str]]]
 
 
 class NodeStore:
@@ -30,7 +33,7 @@ class NodeStore:
             )
         return node
 
-    def frontier(self) -> list[dict[str, str | dict[str, str] | dict[str, list[str]]]]:
+    def frontier(self) -> list[Row]:
         """Open or in-progress nodes whose in-store dependencies are all settled.
 
         The leanblueprint frontier idea over wikilinks: these are the nodes ready
@@ -41,17 +44,10 @@ class NodeStore:
         for node in nodes.values():
             if node.status is not None and node.status.is_settled:
                 continue
-            others = [link for link in node.links if link in nodes and link != node.name]
-            dependencies = {link: nodes[link].status for link in others}
-            if all(status is not None and status.is_settled for status in dependencies.values()):
-                entry: dict[str, str | dict[str, str] | dict[str, list[str]]] = {
-                    "node": node.name,
-                    "status": str(node.status),
-                    "deps": {name: str(status) for name, status in dependencies.items()},
-                }
-                if node.relations:
-                    entry["relations"] = node.relations
-                ready.append(entry)
+            dependencies = self.__dependencies(node, nodes)
+            if any(status is None or not status.is_settled for status in dependencies.values()):
+                continue
+            ready.append(self.__row(node, dependencies))
         return ready
 
     def nodes(self) -> list[Node]:
@@ -79,3 +75,22 @@ class NodeStore:
         if invalid:
             groups["invalid"] = invalid
         return groups
+
+    @staticmethod
+    def __dependencies(node: Node, nodes: Mapping[str, Node]) -> dict[str, Status | None]:
+        """Statuses of the in-store nodes one node links to, itself never counted."""
+        return {
+            link: nodes[link].status for link in node.links if link in nodes and link != node.name
+        }
+
+    @staticmethod
+    def __row(node: Node, dependencies: Mapping[str, Status | None]) -> Row:
+        """One frontier row, carrying typed relations only when the node states some."""
+        row: Row = {
+            "node": node.name,
+            "status": str(node.status),
+            "deps": {name: str(status) for name, status in dependencies.items()},
+        }
+        if node.relations:
+            row["relations"] = node.relations
+        return row

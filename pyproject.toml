@@ -91,6 +91,38 @@ batch_size = 8
 [tool.mcmr.rules."ALL-CLAS0005"]
 policy = { kind = "numeric", maximum = 12 }
 
+# Four directories sit one module above the ceiling, and each one the rule's own
+# Exceptions section argues against splitting. `src/atpx/counsel` holds the two
+# counsel agents, the boss mechanic the refuter drives, and the one probe
+# toolkit all three share, so the only split available is a forwarding folder
+# around a single module. `src/atpx/rigor/audits` is a definition catalog in
+# every module but `audit.py`, which carries the witness reader beside the
+# `Audit` seam; the exemption would come back only by turning a structural
+# Protocol into an inherited base, which trades a seam for a metric.
+# `tests/core` and `tests/counsel` mirror source directories that the catalog
+# exemption already clears, and a test module declaring several cases can never
+# be a catalog itself, so the ceiling would force the test tree to stop
+# mirroring the code it tests.
+[tool.mcmr.rules."ALL-FILE0003"]
+exclude = [
+  "src/atpx/counsel",
+  "src/atpx/rigor/audits",
+  "tests/core",
+  "tests/counsel",
+]
+
+# Both `__getitem__` overloads discriminate a single column name from a list of
+# them, and every abstract collection of `str` also admits `str` itself, so an
+# abstract `key` makes the two signatures overlap. mypy proves it, rejecting
+# `Sequence[str]` here with `Overloaded function signatures 1 and 2 overlap with
+# incompatible return types`. The concrete `list` is what pandas declares and
+# what keeps the overload resolvable.
+[tool.mcmr.rules."PY-COLL0001"]
+exclude = [
+  "src/atpx/discovery/contracts/frame.py",
+  "tests/support/doubles/frame.py",
+]
+
 [tool.ruff]
 line-length = 99
 target-version = "py314"
@@ -138,6 +170,9 @@ disable_error_code = ["explicit-any"]
 
 [tool.pytest.ini_options]
 addopts = "-q -ra --import-mode=importlib -m 'not integration' --cov=atpx --cov-report=term-missing"
+# The docs tests import the mkdocs hook package `docs.hooks`, resolved from the
+# repository root whether pytest runs as `uv run pytest` or `python -m pytest`.
+pythonpath = ["."]
 strict_config = true
 strict_markers = true
 strict_parametrization_ids = true

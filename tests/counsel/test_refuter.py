@@ -18,6 +18,8 @@ print('mismatch', file=sys.stderr)
 sys.exit(1)
 """
 _VACUOUS_PROBE = "print('all good, trust me')\n"
+_FIRST_ATTACK = "refute-1-1"
+_SURVIVED = "survived"
 
 
 def attack_reply(probe: str, *, verdict: str = "NONE") -> str:
@@ -46,10 +48,10 @@ def test_an_undefended_demonstration_loses_the_bout(root: Path) -> None:
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=1, rounds=1)
     assert referral.verdict == "FATAL candidate"
     attack, defense = referral.episodes
-    assert attack.demonstrated and attack.claim == "refute-1-1"
+    assert attack.demonstrated and attack.claim == _FIRST_ATTACK
     assert not defense.demonstrated and defense.claim == "defend-1-1"
     entries = evidence_entries(root / "research" / "math" / "demo")
-    assert entries[-1]["claim"] == "demo/refute-1-1" and entries[-1]["exit_status"] == 0
+    assert entries[-1]["claim"] == f"demo/{_FIRST_ATTACK}" and entries[-1]["exit_status"] == 0
 
 
 def test_a_rebutted_boss_must_attack_again(root: Path) -> None:
@@ -59,9 +61,9 @@ def test_a_rebutted_boss_must_attack_again(root: Path) -> None:
         attack_reply(_FAILING_PROBE),
     )
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=1, rounds=2)
-    assert referral.verdict == "survived"
+    assert referral.verdict == _SURVIVED
     assert [episode.claim for episode in referral.episodes] == [
-        "refute-1-1",
+        _FIRST_ATTACK,
         "defend-1-1",
         "refute-1-2",
     ]
@@ -79,7 +81,7 @@ def test_a_lost_bout_stops_the_ladder(root: Path) -> None:
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=4, rounds=1)
     assert referral.verdict == "FATAL candidate"
     assert [episode.claim for episode in referral.episodes] == [
-        "refute-1-1",
+        _FIRST_ATTACK,
         "refute-2-1",
         "defend-2-1",
     ]
@@ -92,14 +94,14 @@ def test_refuter_survives_non_demonstrating_attacks(root: Path) -> None:
         attack_reply(_VACUOUS_PROBE, verdict="FATAL"),
     )
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=2, rounds=1)
-    assert referral.verdict == "survived"
+    assert referral.verdict == _SURVIVED
     assert [episode.demonstrated for episode in referral.episodes] == [False, False]
 
 
 def test_a_failed_swing_feeds_the_boss_its_violation(root: Path) -> None:
     counsel = FakeCounsel(attack_reply(_VACUOUS_PROBE), attack_reply(_FAILING_PROBE))
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=1, rounds=2)
-    assert referral.verdict == "survived"
+    assert referral.verdict == _SURVIVED
     retry_feedback = counsel.calls[1][-1]
     assert "did not count" in str(retry_feedback["content"])
 
@@ -115,7 +117,7 @@ def test_refuter_drafts_a_judgment_with_defense_states(root: Path) -> None:
     assert draft.parent.name == "judgments" and draft.name.startswith("draft-")
     text = draft.read_text()
     assert text.rstrip().endswith("semantic review by the mathematician required before settle.")
-    assert "rebutting" in text and "refute-1-1" in text and "defend-1-1" in text
+    assert "rebutting" in text and _FIRST_ATTACK in text and "defend-1-1" in text
 
 
 def test_refuter_never_settles_the_node_itself(root: Path) -> None:
@@ -139,7 +141,7 @@ def test_refute_verb_reports_compactly_without_stdout_tails(
 ) -> None:
     monkeypatch.setattr("atpx.counsel.refuter.consult", FakeCounsel(attack_reply(_FAILING_PROBE)))
     summary = live(root).refute("demo", n=1, rounds=1)
-    assert summary["verdict"] == "survived" and summary["slug"] == "demo"
+    assert summary["verdict"] == _SURVIVED and summary["slug"] == "demo"
     episodes = summary["episodes"]
     assert isinstance(episodes, list)
     (episode,) = episodes
@@ -150,9 +152,9 @@ def test_refute_verb_reports_compactly_without_stdout_tails(
 def test_a_gate_fumble_repairs_privately_inside_one_move(root: Path) -> None:
     counsel = FakeCounsel(attack_reply(_VACUOUS_PROBE), attack_reply(_FAILING_PROBE))
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=1, rounds=1, tries=2)
-    assert referral.verdict == "survived"
+    assert referral.verdict == _SURVIVED
     (episode,) = referral.episodes
-    assert episode.claim == "refute-1-1" and not episode.demonstrated
+    assert episode.claim == _FIRST_ATTACK and not episode.demonstrated
     assert len(counsel.calls) == 2
     repair_feedback = counsel.calls[1][-1]
     assert "Repair it" in str(repair_feedback["content"])
@@ -167,6 +169,6 @@ def test_fresh_context_restarts_each_round_from_the_node(root: Path) -> None:
     referral = Refuter(counselor=counsel).fanout(
         live(root), "demo", n=1, rounds=2, context="fresh"
     )
-    assert referral.verdict == "survived"
+    assert referral.verdict == _SURVIVED
     assert len(counsel.calls[2]) == 3
     assert "rebutted your attack" in str(counsel.calls[2][-1]["content"])

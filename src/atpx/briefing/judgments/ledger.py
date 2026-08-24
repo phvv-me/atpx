@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 from ...graph.node import Node
+from ...support.clock import stamp
 from .judgment import Judgment
 
 
@@ -25,7 +25,7 @@ class JudgmentLedger:
 
     def record(self, node: Node) -> Path:
         """Snapshot the node as judged right now, replacing any earlier snapshot."""
-        judgment = Judgment(text=node.text, timestamp=datetime.now(UTC).isoformat())
+        judgment = Judgment(text=node.text, timestamp=stamp())
         path = self.path(node.name)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(judgment.model_dump_json(indent=2) + "\n")

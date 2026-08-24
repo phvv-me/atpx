@@ -14,7 +14,7 @@ def test_judgment_ledger_roundtrips_and_starts_empty(root: Path) -> None:
     assert path == ledger.path("demo")
     judgment = ledger.latest("demo")
     assert judgment is not None
-    assert judgment.text == node.text and judgment.timestamp.endswith("+00:00")
+    assert judgment.text == node.text and judgment.timestamp.endswith("Z")
 
 
 def test_brief_bundles_node_deps_evidence_judgment_and_files(space: Workspace) -> None:

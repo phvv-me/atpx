@@ -1,13 +1,14 @@
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 
 from ..models.lane import ModelLane
 from ..models.lanes import Lanes
+from ..support.clock import today
 from .bout import Bout, Context
 from .consulting.openrouter import consult
 from .consulting.seam import Counselor
 from .probing import charge, tactics
+from .records.arena import Arena
 from .records.episode import Episode
 from .records.referral import Referral
 from .records.workbench import Workbench
@@ -79,21 +80,20 @@ class Refuter:
         """
         node = space.nodes.find(slug)
         lessons = tactics(space.blueprints)
-        summons = charge(_CHARGE, lessons=lessons)
+        arena = Arena(space, node, summons=charge(_CHARGE, lessons=lessons), lessons=lessons)
         episodes: list[Episode] = []
         beaten = True
         for index in range(n):
             bout = Bout(
                 self.lanes[index % len(self.lanes)],
+                arena=arena,
                 defender=self.defender,
                 counselor=self.counselor,
                 rounds=rounds,
                 tries=tries,
                 context=context,
             )
-            moves, beaten = bout.fought(
-                space, node, rung=index + 1, summons=summons, lessons=lessons
-            )
+            moves, beaten = bout.fought(rung=index + 1)
             episodes.extend(moves)
             if not beaten:
                 break
@@ -117,8 +117,7 @@ class Refuter:
         verdict: the mechanical verdict the ladder computed.
         episodes: every move of every bout, stdout tails included.
         """
-        date = datetime.now(UTC).date().isoformat()
-        path = directory / "judgments" / f"draft-{date}.md"
+        path = directory / "judgments" / f"draft-{today()}.md"
         lines = [f"# Draft judgment for {slug}", "", f"Mechanical verdict {verdict}.", ""]
         for entry in episodes:
             defending = entry.claim.startswith("defend")

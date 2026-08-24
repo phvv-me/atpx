@@ -10,8 +10,10 @@ Each entry maps a section name to the doc paths under `docs/`, in order.
 
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from mkdocs.config.defaults import MkDocsConfig
+if TYPE_CHECKING:
+    from mkdocs.config.defaults import MkDocsConfig
 
 _SECTIONS: dict[str, list[str]] = {
     "Usage": ["index.md"],

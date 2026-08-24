@@ -1,9 +1,9 @@
 import platform
-from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import JsonValue
 
+from ..support.clock import stamp
 from .provenance import Provenance
 
 
@@ -65,7 +65,7 @@ class Certificate(Provenance):
             device=f"{platform.system()}-{platform.machine()}",
             seed=seed,
             git_rev=cls.git_revision(root or Path.cwd()),
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=stamp(),
             exit_status=exit_status,
             rigor=rigor,
         )

@@ -46,24 +46,25 @@ def staged(
     return drive(space.run(name, claim, "python", relative, timeout=timeout))
 
 
+def measured(stdout: str) -> list[str]:
+    """The measured lines of a probe's output, a line holding `=` and a digit."""
+    return [line for line in stdout.splitlines() if "=" in line and any(c.isdigit() for c in line)]
+
+
 def gate(source: str, *, stdout: str) -> str | None:
     """The validity gate on a passing probe, the violation message or None when clean.
 
     Measured rules that exit 0 must satisfy to count: the source calls
-    `sys.exit` explicitly, and the output shows at least three measured lines,
-    a line holding `=` and a digit.
+    `sys.exit` explicitly, and the output shows at least three measured lines.
 
     source: the probe source code.
     stdout: the probe's captured output.
     """
     if "sys.exit" not in source:
         return "the probe never calls sys.exit, so exit 0 certifies nothing"
-    measured = [
-        line for line in stdout.splitlines() if "=" in line and any(c.isdigit() for c in line)
-    ]
-    if len(measured) < _MEASURED_LINES:
+    if len(measured(stdout)) < _MEASURED_LINES:
         return (
-            f"only {len(measured)} measured lines printed, at least {_MEASURED_LINES} "
+            f"only {len(measured(stdout))} measured lines printed, at least {_MEASURED_LINES} "
             "`name=value` case lines are required"
         )
     return None

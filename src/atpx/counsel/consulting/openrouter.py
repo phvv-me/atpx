@@ -1,7 +1,8 @@
 import os
 import time
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import cast
 
 from openai import (
     APIConnectionError,
@@ -11,7 +12,9 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
-from openai.types.chat import ChatCompletion
+from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
+from openai.types.shared_params import ResponseFormatJSONSchema
+from pydantic import JsonValue
 
 from ...models.consultation import Consultation
 from ...models.lane import Message, ModelLane, Schema
@@ -142,20 +145,24 @@ class OpenRouter:
 
     def __attempt(self, messages: Sequence[Message], schema: Schema) -> None:
         """One request with the current degradation variant, routed to its outcome."""
+        body: dict[str, JsonValue] = {
+            "provider": {"sort": "throughput", "allow_fallbacks": True},
+            **self.variants[self.step],
+        }
         try:
             completion = self.client.chat.completions.create(
                 model=self.lane.model,
-                messages=messages,
+                messages=cast(Iterable[ChatCompletionMessageParam], messages),
                 max_tokens=self.lane.max_tokens
                 or (_REASONING_MAX_TOKENS if self.lane.reasoning else _MAX_TOKENS),
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {"name": "reply", "strict": True, "schema": schema},
-                },
-                extra_body={
-                    "provider": {"sort": "throughput", "allow_fallbacks": True},
-                    **self.variants[self.step],
-                },
+                response_format=cast(
+                    ResponseFormatJSONSchema,
+                    {
+                        "type": "json_schema",
+                        "json_schema": {"name": "reply", "strict": True, "schema": schema},
+                    },
+                ),
+                extra_body=body,
             )
         except BadRequestError as error:
             return self.__degraded(error)

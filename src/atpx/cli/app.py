@@ -6,7 +6,8 @@ from typing import Annotated, cast
 from cyclopts import App, Parameter
 from pydantic import JsonValue
 
-from .. import Certificate, Naming, Workspace
+from .. import Certificate, Workspace
+from ..support.naming import Naming
 
 # One clean `error:` line for the failures a verb writes for a human, a full
 # traceback for genuine programming faults.

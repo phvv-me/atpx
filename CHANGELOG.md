@@ -4,10 +4,23 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
-## Unreleased
+## 0.0.3 - 2026-08-25
 
 ### Added
 
+- `atpx.support.clock`, the one UTC clock every stamp reads. Certificate
+  timestamps, judgment snapshots and background submission records now render
+  as ISO 8601 UTC with an explicit `Z` suffix, submission log and record
+  filenames carry the same `Z`-suffixed compact stamp, and journal lines,
+  scaffolded nodes and draft judgment filenames date themselves from the same
+  clock. No stamp in the package reads local time anymore.
+- The counsel defense gate grew teeth. A defense probe now counts only when
+  its `case=<name>` lines re-measure every quantity the attack's output
+  named and when no `except` handler in its source can reach `sys.exit`
+  with a status that could be zero, so a probe that measures beside the
+  attack or that launders its own failure into an exit 0 is refused with
+  the exact violation. The hollow defense the units-convention round
+  accepted is the regression test.
 - `--project <path>` on every CLI invocation, pinning one run to a named
   workspace (its root or any directory inside it). The answer to a monorepo
   task runner that changes into the repository root before running anything,
@@ -37,6 +50,15 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   the certificate), comma-joined operator menus (`--unary exp,log`,
   `--binary "+,-,*"`) alongside repeated flags, and cwd-first data path
   resolution (root-relative second).
+
+### Fixed
+
+- The release gate is green again. The OpenRouter call site types its
+  messages, response format and extra body against the openai 2.54 client,
+  a manifest ladder rung validates through pydantic instead of unpacking an
+  untyped table, the mkdocs hook imports its config type only for type
+  checking, and the docs tests resolve `docs.hooks` from the repository
+  root under `uv run pytest` as well.
 
 ### Changed
 
@@ -143,7 +165,7 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   evaluation in the README is historical context now, the question is moot
   by design.
 
-## 0.0.3 - 2026-06-16
+## 0.0.2 - 2026-06-16
 
 ### Fixed
 

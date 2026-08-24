@@ -65,5 +65,7 @@ class Lanes(FrozenModel):
         if isinstance(entry, str):
             return ModelLane(model=entry, reasoning=True)
         if isinstance(entry, dict):
-            return ModelLane(**{"reasoning": True, **entry})
+            table = dict(entry)
+            table.setdefault("reasoning", True)
+            return ModelLane.model_validate(table)
         raise ValueError(f"a ladder entry is a model id or a lane table, got {entry!r}")

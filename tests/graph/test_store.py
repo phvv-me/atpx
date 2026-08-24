@@ -49,8 +49,16 @@ def test_frontier_carries_typed_relations(tmp_path: Path) -> None:
     (blueprints / "parent" / "node.md").write_text(node_text("sketched"))
     (blueprints / "child").mkdir()
     (blueprints / "child" / "node.md").write_text(
-        "---\nstatus: open\ndate: 2026-08-15\nsuccessor_of: parent\n---\n\n"
-        "# C\n\nUses [[parent]].\n"
+        """---
+status: open
+date: 2026-08-15
+successor_of: parent
+---
+
+# C
+
+Uses [[parent]].
+"""
     )
     (entry,) = NodeStore(blueprints).frontier()
     assert entry["node"] == "child"

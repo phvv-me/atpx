@@ -100,10 +100,10 @@ def test_ledgers_skip_and_strays_report_broken_files(broken_home: Path) -> None:
 
 def test_newest_keeps_the_latest_word_on_each_claim_across_hosts(tmp_path: Path) -> None:
     """The lint's view: whoever ran a claim last is what the record currently says."""
-    old = stamped(claim="demo/ok").model_copy(update={"timestamp": "2026-06-01T00:00:00+00:00"})
+    old = stamped(claim="demo/ok").model_copy(update={"timestamp": "2026-06-01T00:00:00.000000Z"})
     EvidenceStore(tmp_path).append(old)
     fresh = stamped(claim="demo/ok").model_copy(
-        update={"hostname": "elsewhere", "timestamp": "2026-06-09T00:00:00+00:00"}
+        update={"hostname": "elsewhere", "timestamp": "2026-06-09T00:00:00.000000Z"}
     )
     EvidenceStore(tmp_path, hostname="elsewhere").append(fresh)
     latest = EvidenceStore.newest(tmp_path, "demo")

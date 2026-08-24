@@ -140,19 +140,24 @@ def test_breakages_never_name_a_tolerated_finding() -> None:
     assert DoctorReport.breakages(tolerated) == []
 
 
-def test_doctor_flags_evidence_older_than_the_statement_it_supports(root: Path) -> None:
-    """Editing a node without re-running its checks leaves evidence certifying the old text."""
+def committed(root: Path) -> str:
+    """Track everything under `root` in a fresh repository, returning its short revision."""
     git = local["git"]["-C", str(root)]
     git("init", "-q")
     git("config", "user.email", "test@example.com")
     git("config", "user.name", "test")
     git("add", ".")
     git("commit", "-qm", "first")
-    stamped_at = str(git("rev-parse", "--short", "HEAD")).strip()
-    node = root / _MATH / "demo" / "node.md"
-    node.write_text(node.read_text() + "\nA sharper statement.\n")
-    git("commit", "-qam", "revised")
+    return str(git("rev-parse", "--short", "HEAD")).strip()
+
+
+def test_doctor_flags_evidence_older_than_the_statement_it_supports(root: Path) -> None:
+    """Editing a node without re-running its checks leaves evidence certifying the old text."""
+    stamped_at = committed(root)
     directory = root / _MATH / "demo"
+    node = directory / "node.md"
+    node.write_text(node.read_text() + "\nA sharper statement.\n")
+    local["git"]["-C", str(root)]("commit", "-qam", "revised")
     for claim in ("ok", "gpu"):
         EvidenceStore(directory).append(
             stamped(f"demo/{claim}").model_copy(update={"git_rev": stamped_at})

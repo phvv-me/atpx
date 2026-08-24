@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 from ..graph.kind import Kind
 from ..graph.node import Node
+from ..support.clock import today
 from ..support.naming import Naming
 
 _SPEC = "claim-spec.md"
@@ -80,8 +80,7 @@ class Scaffold:
         if node.exists():
             raise FileExistsError(f"{slug} already has a node at {node}, refusing to overwrite")
         self.__furnished(directory, slug)
-        today = datetime.now(UTC).date().isoformat()
-        node.write_text(_NODE_TEMPLATE.format(slug=slug, kind=kind.value, date=today))
+        node.write_text(_NODE_TEMPLATE.format(slug=slug, kind=kind.value, date=today()))
         return node
 
     @staticmethod

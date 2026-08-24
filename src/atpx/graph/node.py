@@ -51,30 +51,10 @@ class Node:
                 fields[key.strip()] = value.strip()
         return fields
 
-    RELATIONS: ClassVar[tuple[str, ...]] = ("successor_of", "refutes", "shadows", "lemma_for")
-
     @property
     def links(self) -> list[str]:
         """Wikilink targets in order of appearance, duplicates removed."""
         return list(dict.fromkeys(_WIKILINK.findall(self.text)))
-
-    @property
-    def relations(self) -> dict[str, list[str]]:
-        """Typed edges from flat frontmatter keys, each a comma-separated slug list.
-
-        The lineage the campaigns used to narrate in journal prose, made
-        computable: `successor_of` points at the node this one grew from,
-        `refutes` at what its counterexample killed, `shadows` at nodes whose
-        certificates its findings weaken, `lemma_for` at the nodes that lean
-        on it.
-        """
-        found = {}
-        for kind in self.RELATIONS:
-            raw = self.frontmatter.get(kind, "")
-            slugs = [part.strip() for part in raw.split(",") if part.strip()]
-            if slugs:
-                found[kind] = slugs
-        return found
 
     @property
     def log(self) -> list[LogEntry]:
@@ -93,6 +73,26 @@ class Node:
     def raw_status(self) -> str | None:
         """The literal frontmatter status string, None when the node carries none."""
         return self.frontmatter.get("status") or None
+
+    RELATIONS: ClassVar[tuple[str, ...]] = ("successor_of", "refutes", "shadows", "lemma_for")
+
+    @property
+    def relations(self) -> dict[str, list[str]]:
+        """Typed edges from flat frontmatter keys, each a comma-separated slug list.
+
+        The lineage the campaigns used to narrate in journal prose, made
+        computable: `successor_of` points at the node this one grew from,
+        `refutes` at what its counterexample killed, `shadows` at nodes whose
+        certificates its findings weaken, `lemma_for` at the nodes that lean
+        on it.
+        """
+        found = {}
+        for kind in self.RELATIONS:
+            raw = self.frontmatter.get(kind, "")
+            slugs = [part.strip() for part in raw.split(",") if part.strip()]
+            if slugs:
+                found[kind] = slugs
+        return found
 
     @property
     def status(self) -> Status | None:

@@ -20,7 +20,7 @@ def test_stamp_captures_full_provenance() -> None:
     certificate = Certificate.stamp(claim="demo/ok", result=1, engine="e", engine_version="0")
     assert certificate.hostname == short_hostname()
     assert "-" in certificate.device
-    assert certificate.timestamp.endswith("+00:00")
+    assert certificate.timestamp.endswith("Z")
     assert certificate.seed is None
     assert json.loads(str(certificate))["claim"] == "demo/ok"
 
