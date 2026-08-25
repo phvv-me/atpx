@@ -4,6 +4,46 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
+## 0.0.4 - 2026-08-25
+
+### Added
+
+- The node frontmatter contract. `node.md` frontmatter now parses into a typed
+  `Frontmatter` model in the graph layer, with `depends` (the slugs a statement
+  leans on), `serves` (the papers or experiments a node feeds), `seeds` (the
+  seed bases allocated to the node), and `judgments` (the ruling files a
+  sketched status rests on), each read from bracketed or bare comma lists. The
+  parse is backfill-tolerant: a missing block or a malformed field lands in
+  `problems` for `doctor` to report and never crashes a reader. A node's
+  `kind` now derives a `Category`, and `probe-pool` directories are exempt
+  from the claim lints while `convention` nodes are held to them.
+- `atpx index` regenerates two artifacts from node state alone: the INDEX
+  markdown with a generated node table, and a blueprint-shaped graph JSON
+  beside it (nodes with slug, state, and one-line claim; edges from
+  `depends`). Hand-authored prose is never deleted; the first generation over
+  a hand-written index moves its whole body under a clearly marked manual
+  section, which every later regeneration preserves verbatim.
+- `doctor` grew completeness verdicts, all gating the exit code: frontmatter
+  that does not parse, a claim node without a statement of record or an
+  explicit refutation condition, a sketched node whose linked judgment is
+  missing or names no attacking rung, a statement that drifted from its
+  judgment snapshot (the check the backfill ran by hand), and an index a
+  regeneration would change. Certificates with no pre-registration design
+  file beside them report as untidiness without failing the gate.
+- `atpx note <slug> <text>`, the append-only evidence verb. One dated UTC
+  bullet lands at the end of the `## Evidence` section, and a node without
+  that section is refused rather than restructured, so nothing above the
+  evidence heading can ever be touched.
+- `atpx design <slug>` scaffolds an AsPredicted-shaped pre-registration file
+  in the node directory (hypothesis, observable, conditions, decision rule,
+  seed base, cost estimate, exploratory declaration). The seed base is
+  allocated fresh from the workspace-wide frontmatter registry and recorded
+  in the node's `seeds` list in the same call.
+- Judgments record the attacking rung first-class. `Referral` carries `rung`
+  and `boss`, and every draft judgment the refuter writes names its strongest
+  attacking rung and the lane that fought it, the line the sketch gate's
+  doctor check reads.
+
 ## 0.0.3 - 2026-08-25
 
 ### Added

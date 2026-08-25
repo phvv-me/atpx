@@ -63,14 +63,60 @@ def test_adopt_names_a_missing_source(space: Workspace) -> None:
         space.adopt("ghost", source="nowhere/ghost.md")
 
 
-def test_index_regenerates_and_writes(space: Workspace) -> None:
-    text = space.index(write=True)
-    assert "- [[dep]], a settled dep." in text
-    assert text == space.results_index.path.read_text()
-
-
-def test_index_without_write_leaves_the_file_alone(space: Workspace) -> None:
-    before = space.results_index.path.read_text()
+def test_index_writes_the_table_and_the_graph_beside_it(space: Workspace) -> None:
     text = space.index()
-    assert "- [[dep]], a settled dep." in text
-    assert space.results_index.path.read_text() == before
+    assert "| [[dep]] | sketched | a settled dep |" in text
+    assert text == space.ledger_index.path.read_text()
+    assert space.ledger_index.graph_path == space.blueprints / "INDEX.json"
+    assert '"slug": "dep"' in space.ledger_index.graph_path.read_text()
+
+
+def test_index_moves_the_hand_written_body_under_the_manual_section(space: Workspace) -> None:
+    text = space.index()
+    manual = text.partition(space.ledger_index.MANUAL)[2]
+    assert "Preamble prose." in manual and "Footer prose." in manual
+    assert space.index() == text
+
+
+def test_note_appends_a_dated_bullet_to_the_evidence_section(space: Workspace) -> None:
+    line = space.note("demo", "n1 run 1 exit 0 PASS", tag="run")
+    assert line.startswith("- [run ") and line.endswith("] n1 run 1 exit 0 PASS")
+    text = (space.blueprints / "demo" / "node.md").read_text()
+    evidence = text.partition("## Evidence")[2].partition("## Log")[0]
+    assert line in evidence
+
+
+def test_note_never_touches_anything_above_the_evidence_section(space: Workspace) -> None:
+    node = space.blueprints / "demo" / "node.md"
+    above_before = node.read_text().partition("## Evidence")[0]
+    space.note("demo", "first")
+    space.note("demo", "second")
+    above, _, below = node.read_text().partition("## Evidence")
+    assert above == above_before
+    assert below.index("] first") < below.index("] second")
+
+
+def test_note_refuses_a_node_without_an_evidence_section(space: Workspace) -> None:
+    node = space.blueprints / "dep" / "node.md"
+    node.write_text(node.read_text().replace("## Evidence\n\n", ""))
+    with pytest.raises(ValueError, match="no '## Evidence' section"):
+        space.note("dep", "nowhere to land")
+
+
+def test_note_refuses_a_bullet_that_would_not_round_trip(space: Workspace) -> None:
+    with pytest.raises(ValueError, match="one line"):
+        space.note("demo", "line one\nline two")
+    with pytest.raises(ValueError, match="tag"):
+        space.note("demo", "fine", tag="not a tag")
+
+
+def test_design_scaffolds_a_pre_registration_and_allocates_a_seed(space: Workspace) -> None:
+    filed = space.design("demo")
+    path = space.root / filed
+    assert path.parent == space.blueprints / "demo" and path.name.startswith("design-")
+    text = path.read_text()
+    headings = {line for line in text.splitlines() if line.startswith("## ")}
+    fields = {"Hypothesis", "Observable", "Conditions", "Decision rule", "Seed base"}
+    assert {f"## {field}" for field in fields | {"Cost estimate", "Exploratory"}} <= headings
+    (seed,) = space.nodes.find("demo").front.seeds
+    assert f"## Seed base\n\n{seed}," in text

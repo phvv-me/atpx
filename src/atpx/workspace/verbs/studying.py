@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from ...blueprint.manifest import Blueprint
@@ -6,8 +7,12 @@ from ...briefing.judge import JudgeBriefing
 from ...core import git_revision
 from ...graph.journal import LogEntry
 from ...graph.node import Node
+from ...study.designing import Design
+from ...support.clock import today
 from ..foundation import Slug, TagName
 from ..state import FoundationState
+
+_TAG = re.compile(r"^[\w.-]+$")
 
 
 class StudyVerbs(FoundationState):
@@ -49,19 +54,32 @@ class StudyVerbs(FoundationState):
         node = self.nodes.find(slug)
         return Briefing(blueprint, node, self.nodes, git_revision(self.root)).render()
 
+    def design(self, slug: Slug) -> str:
+        """Scaffold today's pre-registration file for one node, allocating its seed base.
+
+        An AsPredicted-shaped `design-<date>.md` lands in the node directory
+        with hypothesis, observable, conditions, decision rule, cost estimate,
+        and exploratory declaration to fill in before the run, and the seed
+        base it quotes is drawn fresh from the workspace-wide frontmatter
+        registry and recorded in the node's `seeds` list in the same call.
+
+        slug: the blueprint directory name holding the node.
+        """
+        return str(Design(self.nodes).scaffold(slug).relative_to(self.root))
+
     def graph(self) -> list[dict[str, str | dict[str, str] | dict[str, list[str]]]]:
         """The frontier: unsettled nodes whose wikilink dependencies are all settled."""
         return self.nodes.frontier()
 
-    def index(self, *, write: bool = False) -> str:
-        """Regenerate the results index from node frontmatter, writing it when asked.
+    def index(self) -> str:
+        """Regenerate the index artifacts from node state, returning the markdown.
 
-        write: persist the regenerated index over the existing file.
+        Writes both files the workspace's `index` setting anchors: the INDEX
+        note with its generated table, and the blueprint-shaped graph JSON
+        beside it. Hand-authored prose survives under the manual section, moved
+        there whole the first time the generator meets a hand-written index.
         """
-        text = self.results_index.render(self.nodes.nodes())
-        if write:
-            self.results_index.path.write_text(text)
-        return text
+        return self.ledger_index.write(self.nodes.nodes())
 
     def judge_brief(self, slug: Slug) -> str:
         """What changed since the node's last judgment snapshot, as markdown.
@@ -87,6 +105,27 @@ class StudyVerbs(FoundationState):
         node = self.nodes.find(slug)
         line = str(LogEntry.today(who=who, tag=tag, message=message))
         node.append_log(line)
+        return line
+
+    def note(self, slug: Slug, text: str, *, tag: TagName = "note") -> str:
+        """Append one dated evidence bullet to a node, `- [tag date] text`, append-only.
+
+        The bullet lands at the end of the `## Evidence` section, stamped with
+        today's UTC date. Nothing above that heading is ever touched: a node
+        without an `## Evidence` section is refused rather than restructured,
+        statement and frontmatter included.
+
+        slug: the blueprint directory name holding the node.
+        text: the one-line evidence bullet body.
+        tag: the pass or source tag inside the brackets.
+        """
+        if not _TAG.match(tag):
+            raise ValueError(f"tag {tag!r} must match {_TAG.pattern}")
+        if "".join(text.splitlines()) != text:
+            raise ValueError("an evidence bullet must stay on one line")
+        node = self.nodes.find(slug)
+        line = f"- [{tag} {today()}] {text}"
+        node.append_evidence(line)
         return line
 
     def status(self) -> dict[str, list[str]]:

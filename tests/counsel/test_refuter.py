@@ -86,6 +86,7 @@ def test_a_lost_bout_stops_the_ladder(root: Path) -> None:
         "defend-2-1",
     ]
     assert len(counsel.calls) == 3
+    assert referral.rung == 2 and referral.boss == referral.episodes[1].model
 
 
 def test_refuter_survives_non_demonstrating_attacks(root: Path) -> None:
@@ -118,6 +119,14 @@ def test_refuter_drafts_a_judgment_with_defense_states(root: Path) -> None:
     text = draft.read_text()
     assert text.rstrip().endswith("semantic review by the mathematician required before settle.")
     assert "rebutting" in text and _FIRST_ATTACK in text and "defend-1-1" in text
+    assert f"Strongest attacking rung 1 ({referral.boss})." in text
+
+
+def test_a_zero_bout_fanout_survives_vacuously_with_no_rung(root: Path) -> None:
+    referral = Refuter(counselor=FakeCounsel()).fanout(live(root), "demo", n=0, rounds=1)
+    assert referral.verdict == _SURVIVED and referral.episodes == []
+    assert referral.rung == 0 and referral.boss == ""
+    assert "Strongest attacking rung" not in (root / referral.draft).read_text()
 
 
 def test_refuter_never_settles_the_node_itself(root: Path) -> None:
@@ -134,6 +143,7 @@ def test_refuter_cycles_the_attack_lanes(root: Path) -> None:
     referral = Refuter(counselor=counsel).fanout(live(root), "demo", n=5, rounds=1)
     models = [episode.model for episode in referral.episodes]
     assert models[4] == models[0] and len(counsel.calls) == 5
+    assert referral.rung == 5 and referral.boss == models[4]
 
 
 def test_refute_verb_reports_compactly_without_stdout_tails(

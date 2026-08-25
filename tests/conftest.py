@@ -29,7 +29,22 @@ requires = "cuda"
     planted(
         blueprints,
         "dep",
-        text=node_text("sketched", title="Dep", body="Settled.", summary="a settled dep"),
+        text=node_text(
+            "sketched",
+            title="Dep",
+            body="Settled.",
+            summary="a settled dep",
+            front={"judgments": "[judgments/draft.md]"},
+        ),
+    )
+    (blueprints / "dep" / "judgments").mkdir()
+    (blueprints / "dep" / "judgments" / "draft.md").write_text(
+        """# Draft judgment for dep
+
+Mechanical verdict survived.
+
+Strongest attacking rung 1 (fake/model).
+"""
     )
     planted(
         blueprints,
@@ -37,12 +52,7 @@ requires = "cuda"
         text=node_text("in_progress", title="Blocked", body="Needs [[demo]]."),
     )
     (blueprints / "INDEX.md").write_text(
-        """---
-date: 2026-06-10
----
-#structure #math
-
-# Mathematics Results Index
+        """# Mathematics Results Index
 
 Preamble prose.
 

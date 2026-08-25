@@ -60,6 +60,8 @@ def build(space: Workspace) -> App:
         space.fit,
         space.recall,
         space.log,
+        space.note,
+        space.design,
         space.adopt,
         space.index,
     )

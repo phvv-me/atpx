@@ -43,6 +43,16 @@ each milestone needs. It is a direction, not a contract, so order and scope can 
       owns the loop and runs sync and async verbs alike, and synchronous
       scripts block through the `workspace().sync` facade over the one
       remaining `runtime.drive`.
+- [x] The ledger discipline, 0.0.4. A typed node frontmatter contract
+      (`depends`, `serves`, `seeds`, `judgments`) read tolerantly for
+      backfill, `index` regenerating the INDEX table and a blueprint-shaped
+      graph JSON while hand prose survives under a manual section, `doctor`
+      completeness verdicts (statement of record, refutation condition,
+      linked judgment naming its attacking rung, snapshot drift, index
+      currency), the append-only `note` evidence verb, `design`
+      pre-registration files with seed bases allocated from the frontmatter
+      registry, and the attacking rung first-class on every referral and
+      draft judgment.
 
 ## Stage 3b, the Lean bridge
 

@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import ClassVar
 
+from .frontmatter import Frontmatter, fields
 from .journal import LogEntry
 from .status import Status
 
@@ -10,6 +11,29 @@ _WIKILINK = re.compile(r"\[\[([^\]|#]+)")
 _TAG = re.compile(r"(?<!\S)#([\w-]+)")
 _LOG_HEADING = "## Log"
 _LOG_LINE = re.compile(r"^- \[(\w+)/([\w.-]+) (\d{4}-\d{2}-\d{2})\] (.*)$", re.MULTILINE)
+_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def statement_of(text: str) -> str:
+    """The statement of record inside one node text, empty when it has none.
+
+    The `## Statement` section when the node declares one, else everything
+    between the title heading and the first section heading, the implicit
+    statement block of the pre-contract ledger. The same extraction reads a
+    live node and a judgment snapshot, so the drift lint compares like with
+    like.
+
+    text: the full node or snapshot content.
+    """
+    lines = text.splitlines()
+    start = next(
+        (i for i, line in enumerate(lines) if line.lower().startswith("## statement")),
+        next((i for i, line in enumerate(lines) if line.startswith("# ")), None),
+    )
+    if start is None:
+        return ""
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return "\n".join(lines[start + 1 : end]).strip()
 
 
 class Node:
@@ -21,10 +45,16 @@ class Node:
     """
 
     FILENAME: ClassVar[str] = "node.md"
+    EVIDENCE_HEADING: ClassVar[str] = "## Evidence"
 
     def __init__(self, path: Path) -> None:
         """path: the `node.md` file inside a blueprint directory."""
         self.path = path
+
+    @property
+    def conditioned(self) -> bool:
+        """Whether the node states an explicit refutation condition anywhere in its text."""
+        return "refutation condition" in self.text.lower()
 
     @property
     def date(self) -> str:
@@ -37,19 +67,20 @@ class Node:
         return self.path.parent
 
     @property
+    def front(self) -> Frontmatter:
+        """The typed frontmatter contract, tolerant of backfill gaps."""
+        return Frontmatter.parse(self.text)
+
+    @property
     def frontmatter(self) -> dict[str, str]:
         """The YAML-ish key value block between the leading `---` fences."""
-        lines = self.text.splitlines()
-        if not lines or lines[0] != "---":
-            return {}
-        fields = {}
-        for line in lines[1:]:
-            if line == "---":
-                break
-            key, separator, value = line.partition(": ")
-            if separator:
-                fields[key.strip()] = value.strip()
-        return fields
+        return fields(self.text) or {}
+
+    @property
+    def headline(self) -> str:
+        """The title heading's text, the one-line claim the index quotes."""
+        found = re.search(r"^# (.+)$", self.text, re.MULTILINE)
+        return found.group(1).strip() if found else ""
 
     @property
     def links(self) -> list[str]:
@@ -95,6 +126,16 @@ class Node:
         return found
 
     @property
+    def stated(self) -> bool:
+        """Whether the statement of record holds real prose, placeholders aside."""
+        return bool(_COMMENT.sub("", self.statement).strip())
+
+    @property
+    def statement(self) -> str:
+        """The statement of record, per `statement_of`."""
+        return statement_of(self.text)
+
+    @property
     def status(self) -> Status | None:
         """The node's lifecycle status, None when absent or not a known value.
 
@@ -122,6 +163,26 @@ class Node:
         """Current file content."""
         return self.path.read_text()
 
+    def append_evidence(self, line: str) -> None:
+        """Append one bullet at the end of the `## Evidence` section, and nowhere else.
+
+        Evidence is append-only below the statement, so a node without an
+        `## Evidence` section is refused rather than restructured: nothing this
+        method writes can ever touch a line above the evidence heading.
+
+        line: the already formatted `- [tag date] text` bullet.
+        """
+        lines = self.text.splitlines()
+        start = next(
+            (i for i, text in enumerate(lines) if text.startswith(self.EVIDENCE_HEADING)), None
+        )
+        if start is None:
+            raise ValueError(
+                f"{self.name} has no {self.EVIDENCE_HEADING!r} section; "
+                "add one below the statement before noting evidence"
+            )
+        self.path.write_text("\n".join(self.__inserted(lines, start, line)) + "\n")
+
     def append_log(self, line: str) -> None:
         """Append one formatted line to the `## Log` section, creating it when missing.
 
@@ -132,49 +193,62 @@ class Node:
         if start is None:
             lines += ["", f"{_LOG_HEADING}    (append-only: [who/tag YYYY-MM-DD] one line)"]
             start = len(lines) - 1
-        end = next(
-            (i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines)
-        )
-        while end > start + 1 and not lines[end - 1].strip():
-            end -= 1
-        lines.insert(end, line)
-        self.path.write_text("\n".join(lines) + "\n")
+        self.path.write_text("\n".join(self.__inserted(lines, start, line)) + "\n")
 
-    def set_status(self, status: Status) -> None:
-        """Rewrite the frontmatter `status` field, the node's one mutable field.
+    def set_field(self, key: str, *, value: str) -> None:
+        """Rewrite one frontmatter field in place, opening a block when the node has none.
 
-        Edits the field in place when the node already carries a frontmatter block,
-        inserts it just inside the opening fence when the block has no status line, and
-        opens a fresh frontmatter block when the node has none. Reading tolerates a node
-        whose closing fence is missing (see :attr:`frontmatter`), so writing must too
-        rather than raise on the same malformed file.
+        Edits the field's line when the block already carries it, inserts it just inside
+        the opening fence otherwise, and opens a fresh frontmatter block on a plain note.
+        Reading tolerates a node whose closing fence is missing (see :func:`fields`), so
+        writing must too rather than raise on the same malformed file.
 
-        status: the new lifecycle status.
+        key: the frontmatter key to write.
+        value: the field's new raw text.
         """
         lines = self.text.splitlines()
-        field = f"status: {status.value}"
+        field = f"{key}: {value}"
         if not lines or lines[0] != "---":
             lines[:0] = ["---", field, "---", ""]
             self.path.write_text("\n".join(lines) + "\n")
             return
         fence = self.__closing_fence(lines)
         for position in range(1, fence):
-            if lines[position].startswith("status:"):
+            if lines[position].startswith(f"{key}:"):
                 lines[position] = field
                 break
         else:
             lines.insert(1, field)
         self.path.write_text("\n".join(lines) + "\n")
 
+    def set_status(self, status: Status) -> None:
+        """Rewrite the frontmatter `status` field, the lifecycle's one mutable field.
+
+        status: the new lifecycle status.
+        """
+        self.set_field("status", value=status.value)
+
     @staticmethod
     def __closing_fence(lines: Sequence[str]) -> int:
-        """Index of the frontmatter's closing `---`, or the line count when it is absent.
-
-        A node that opens a frontmatter block but never closes it still has every line
-        after the opening fence treated as frontmatter, the same lenient reading
-        :attr:`frontmatter` does, so a status edit never raises on a half-written file.
-        """
+        """Index of the frontmatter's closing `---`, or the line count when it is absent."""
         try:
             return lines.index("---", 1)
         except ValueError:
             return len(lines)
+
+    @staticmethod
+    def __inserted(lines: Sequence[str], start: int, line: str) -> list[str]:
+        """The node lines with one entry appended at the end of the section at `start`.
+
+        lines: the node file's lines.
+        start: the index of the section's heading line.
+        line: the entry to insert before the next section or the trailing blanks.
+        """
+        found = list(lines)
+        end = next(
+            (i for i in range(start + 1, len(found)) if found[i].startswith("## ")), len(found)
+        )
+        while end > start + 1 and not found[end - 1].strip():
+            end -= 1
+        found.insert(end, line)
+        return found

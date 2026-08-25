@@ -36,8 +36,10 @@ them through the `ws.sync` facade (`ws.sync.run(...)`, `ws.sync.check(...)`,
 | `fit(data, target, slug=None, seed=0, niterations=40, unary=None, binary=None, tail=None, driver=None, features=None)` | sync | the PySR Pareto front with holdout scores, honest when dormant |
 | `recall(query, sources=None)` | async | federated search hits per source |
 | `log(slug, who, tag, message)` | sync | one appended journal line, validated to round-trip |
+| `note(slug, text, tag="note")` | sync | one dated evidence bullet appended below `## Evidence`, nothing above it ever touched |
+| `design(slug)` | sync | a scaffolded `design-<date>.md` pre-registration with a fresh seed base recorded in the node frontmatter |
 | `adopt(slug, source)` | sync | a markdown note copied into `blueprints/<slug>/node.md`, source untouched |
-| `index(write=False)` | sync | the regenerated results index note |
+| `index()` | sync | the regenerated index note and the graph JSON beside it, hand-written prose preserved under the manual section |
 
 Under the facade, each verb delegates to one service module: `running`
 (capture-first execution and the freshness sweep), `settlement` (the evidence
@@ -47,8 +49,8 @@ audit), `discovery` (the fit lane behind a `SymbolicRegressor` seam),
 
 The supporting types are `atpx.Certificate`, `atpx.Blueprint`, `atpx.Claim`,
 `atpx.EvidenceStore`, `atpx.NodeStore`, `atpx.Node`, `atpx.Status`,
-`atpx.Capability`, `atpx.Engine`, and the errors `atpx.SettleError` and
-`atpx.SearchError`. The refuter's probe library lives in `atpx.adversarial`
+`atpx.Frontmatter`, `atpx.Category`, `atpx.Capability`, `atpx.Engine`, and
+the errors `atpx.SettleError` and `atpx.SearchError`. The refuter's probe library lives in `atpx.adversarial`
 as `seed_sensitivity`, `boundary_ties`, `precision_tilt`, and `rederive`.
 Every self-reference derives from `atpx.NAME` and `atpx.CONFIG`, so renaming
 the package folder renames the tool, its CLI, its manifest files, and its

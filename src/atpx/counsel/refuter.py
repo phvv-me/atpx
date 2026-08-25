@@ -81,45 +81,36 @@ class Refuter:
         node = space.nodes.find(slug)
         lessons = tactics(space.blueprints)
         arena = Arena(space, node, summons=charge(_CHARGE, lessons=lessons), lessons=lessons)
-        episodes: list[Episode] = []
-        beaten = True
-        for index in range(n):
-            bout = Bout(
-                self.lanes[index % len(self.lanes)],
-                arena=arena,
-                defender=self.defender,
-                counselor=self.counselor,
-                rounds=rounds,
-                tries=tries,
-                context=context,
-            )
-            moves, beaten = bout.fought(rung=index + 1)
-            episodes.extend(moves)
-            if not beaten:
-                break
-        verdict = "survived" if beaten else "FATAL candidate"
-        draft = self.__drafted(node.directory, slug=slug, verdict=verdict, episodes=episodes)
-        return Referral(
-            slug=slug,
-            verdict=verdict,
-            episodes=episodes,
-            draft=draft.relative_to(space.root).as_posix(),
+        episodes, beaten, rung = self.__climbed(
+            arena, n, rounds=rounds, tries=tries, context=context
         )
+        referral = Referral(
+            slug=slug,
+            verdict="survived" if beaten else "FATAL candidate",
+            rung=rung,
+            boss=self.lanes[(rung - 1) % len(self.lanes)].model if rung else "",
+            episodes=episodes,
+            draft="",
+        )
+        draft = self.__drafted(node.directory, referral)
+        return referral.model_copy(update={"draft": draft.relative_to(space.root).as_posix()})
 
     @staticmethod
-    def __drafted(
-        directory: Path, *, slug: str, verdict: str, episodes: Sequence[Episode]
-    ) -> Path:
+    def __drafted(directory: Path, referral: Referral) -> Path:
         """Write the draft judgment for the mathematician, `judgments/draft-<date>.md`.
 
+        The strongest attacking rung heads the draft as a first-class line, so a
+        sketch settling on this ruling names what its survival is worth.
+
         directory: the blueprint directory the judgment lands in.
-        slug: the node under judgment.
-        verdict: the mechanical verdict the ladder computed.
-        episodes: every move of every bout, stdout tails included.
+        referral: the mechanical outcome, its `draft` path not yet filled in.
         """
         path = directory / "judgments" / f"draft-{today()}.md"
-        lines = [f"# Draft judgment for {slug}", "", f"Mechanical verdict {verdict}.", ""]
-        for entry in episodes:
+        lines = [f"# Draft judgment for {referral.slug}", ""]
+        lines += [f"Mechanical verdict {referral.verdict}.", ""]
+        if referral.rung:
+            lines += [f"Strongest attacking rung {referral.rung} ({referral.boss}).", ""]
+        for entry in referral.episodes:
             defending = entry.claim.startswith("defend")
             state = (
                 ("rebutting" if entry.demonstrated else "not rebutting")
@@ -133,3 +124,40 @@ class Refuter:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n")
         return path
+
+    def __climbed(
+        self,
+        arena: Arena,
+        n: int,
+        *,
+        rounds: int,
+        tries: int = 1,
+        context: Context = "live",
+    ) -> tuple[list[Episode], bool, int]:
+        """Fight the ladder, returning (moves, boss_beaten, strongest rung fought).
+
+        arena: the node, workspace, summons and tactics every rung shares.
+        n: the maximum number of bouts.
+        rounds: each boss's attack budget per bout.
+        tries: per-move gate-repair budget for each side.
+        context: `live` keeps each boss's history, `fresh` restarts per round.
+        """
+        episodes: list[Episode] = []
+        beaten = True
+        rung = 0
+        for index in range(n):
+            bout = Bout(
+                self.lanes[index % len(self.lanes)],
+                arena=arena,
+                defender=self.defender,
+                counselor=self.counselor,
+                rounds=rounds,
+                tries=tries,
+                context=context,
+            )
+            rung = index + 1
+            moves, beaten = bout.fought(rung=rung)
+            episodes.extend(moves)
+            if not beaten:
+                break
+        return episodes, beaten, rung

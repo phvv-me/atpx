@@ -1,3 +1,4 @@
+import json
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
@@ -6,95 +7,131 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from atpx import Node, NodeStore, Status
-from atpx.study import ResultsIndex
+from atpx.study import LedgerIndex
 
 from ..support import node_text
 
-_HEADINGS = {
-    Status.VERIFIED: "## Verified (Lean-checked)",
-    Status.VALIDATED: "## Validated (rigorous machine certificate)",
-    Status.SKETCHED: "## Sketched (refuter-survived, usable)",
-    Status.IN_PROGRESS: "## In progress / open",
-    Status.OPEN: "## In progress / open",
-    Status.REFUTED: "## Refuted",
-    Status.KNOWN: "## Known (already in the literature)",
-    Status.ABANDONED: "## Abandoned",
-}
-
 nodes_strategy = st.dictionaries(
     keys=st.from_regex(r"node-[a-z]{1,8}", fullmatch=True),
-    values=st.tuples(
-        st.sampled_from(Status),
-        st.dates().map(lambda d: d.isoformat()),
-    ),
+    values=st.sampled_from(Status),
     min_size=1,
     max_size=6,
 )
 
 
-def build_store(nodes: Mapping[str, tuple[Status, str]]) -> NodeStore:
+def build_store(
+    nodes: Mapping[str, Status], depends: Mapping[str, str] | None = None
+) -> NodeStore:
     store = NodeStore(Path(tempfile.mkdtemp()))
-    for slug, (status, date) in nodes.items():
+    for slug, status in nodes.items():
         directory = store.path / slug
         directory.mkdir()
+        front = {"depends": f"[{depends[slug]}]"} if depends and slug in depends else None
         (directory / "node.md").write_text(
-            node_text(status, date=date, summary=f"summary of {slug}", title=slug)
+            node_text(status, summary=f"summary of {slug}", title=slug, front=front)
         )
     return store
 
 
 @given(nodes_strategy)
-def test_every_node_lands_once_under_its_heading(nodes: dict[str, tuple[Status, str]]) -> None:
+def test_every_node_lands_once_in_the_table(nodes: dict[str, Status]) -> None:
     store = build_store(nodes)
-    text = ResultsIndex(store.path / "INDEX.md").render(store.nodes())
-    for slug, (status, _) in nodes.items():
-        entries = [line for line in text.splitlines() if line.startswith(f"- [[{slug}]]")]
-        assert len(entries) == 1
-        assert f"summary of {slug}." in entries[0]
-        section = text.split(_HEADINGS[status], 1)[1].split("\n##", 1)[0]
-        assert f"- [[{slug}]]" in section
+    text = LedgerIndex(store.path / "INDEX.md").render(store.nodes())
+    for slug, status in nodes.items():
+        rows = [line for line in text.splitlines() if line.startswith(f"| [[{slug}]]")]
+        assert rows == [f"| [[{slug}]] | {status.value} | summary of {slug} |"]
 
 
 @given(nodes_strategy)
-def test_sections_sort_by_date_descending_then_name(
-    nodes: dict[str, tuple[Status, str]],
-) -> None:
+def test_the_graph_names_every_node_with_its_state_and_claim(nodes: dict[str, Status]) -> None:
     store = build_store(nodes)
-    text = ResultsIndex(store.path / "INDEX.md").render(store.nodes())
-    by_name = dict(nodes)
-    listed = [
-        line.split("]]")[0].removeprefix("- [[")
-        for line in text.splitlines()
-        if line.startswith("- [[")
-    ]
-    for heading in dict.fromkeys(_HEADINGS.values()):
-        group = [n for n in listed if _HEADINGS[by_name[n][0]] == heading]
-        assert group == sorted(sorted(group), key=lambda n: by_name[n][1], reverse=True)
+    graph = LedgerIndex(store.path / "INDEX.md").graph(store.nodes())
+    assert [row["slug"] for row in graph["nodes"]] == sorted(nodes)
+    for row in graph["nodes"]:
+        slug = str(row["slug"])
+        assert row["state"] == nodes[slug].value and row["claim"] == f"summary of {slug}"
 
 
-def test_preamble_and_footer_survive_regeneration(root: Path) -> None:
+@given(nodes_strategy)
+def test_edges_come_from_the_depends_frontmatter(nodes: dict[str, Status]) -> None:
+    slugs = sorted(nodes)
+    depends = {slug: slugs[0] for slug in slugs[1:]}
+    store = build_store(nodes, depends)
+    graph = LedgerIndex(store.path / "INDEX.md").graph(store.nodes())
+    assert graph["edges"] == [{"from": slug, "to": slugs[0]} for slug in slugs[1:]]
+
+
+def test_first_generation_moves_hand_authored_prose_under_the_manual_section(root: Path) -> None:
     store = NodeStore(root / "research" / "math")
-    index = ResultsIndex(store.path / "INDEX.md")
+    index = LedgerIndex(store.path / "INDEX.md")
+    hand_written = index.path.read_text()
     text = index.render(store.nodes())
-    assert text.startswith("---\ndate: 2026-06-10\n---")
-    assert "Preamble prose." in text
-    assert text.endswith("Footer prose.\n\nLinks: [[Research]].\n")
-    assert "- [[dep]], a settled dep." in text
-    assert "## In progress / open" in text
+    assert text.startswith("# Mathematics Results Index\n")
+    assert LedgerIndex.MARK in text and LedgerIndex.MANUAL in text
+    manual = text.partition(LedgerIndex.MANUAL)[2]
+    for line in hand_written.splitlines()[1:]:
+        assert line in manual if line.strip() else True
+    assert manual.index("Preamble prose.") < manual.index("Footer prose.")
 
 
-def test_rendering_is_idempotent(root: Path) -> None:
+def test_regeneration_is_idempotent_and_preserves_the_manual_section(root: Path) -> None:
     store = NodeStore(root / "research" / "math")
-    index = ResultsIndex(store.path / "INDEX.md")
-    first = index.render(store.nodes())
-    index.path.write_text(first)
+    index = LedgerIndex(store.path / "INDEX.md")
+    first = index.write(store.nodes())
+    assert index.path.read_text() == first
     assert index.render(store.nodes()) == first
+    assert "Preamble prose." in first and "Footer prose." in first
 
 
-def test_a_missing_index_gets_a_minimal_preamble(tmp_path: Path) -> None:
+def test_write_emits_the_graph_json_beside_the_index(root: Path) -> None:
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md")
+    index.write(store.nodes())
+    assert index.graph_path == store.path / "INDEX.json"
+    graph = json.loads(index.graph_path.read_text())
+    assert {row["slug"] for row in graph["nodes"]} == {"demo", "dep", "blocked"}
+
+
+def test_stale_lists_both_artifacts_until_written_then_nothing(root: Path) -> None:
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md")
+    assert index.stale(store.nodes()) == [index.path, index.graph_path]
+    index.write(store.nodes())
+    assert index.stale(store.nodes()) == []
+    store.find("demo").set_status(Status.ABANDONED)
+    assert index.stale(store.nodes()) == [index.path, index.graph_path]
+
+
+def test_a_missing_index_generates_from_scratch_without_a_manual_section(tmp_path: Path) -> None:
     note = tmp_path / "note" / "node.md"
     note.parent.mkdir()
     note.write_text(node_text(Status.SKETCHED, summary="s", title="note"))
-    text = ResultsIndex(tmp_path / "Fresh Index.md").render([Node(note)])
+    index = LedgerIndex(tmp_path / "Fresh Index.md")
+    text = index.render([Node(note)])
     assert text.startswith("# Fresh Index\n")
-    assert "- [[note]], s." in text
+    assert "| [[note]] | sketched | s |" in text
+    assert LedgerIndex.MANUAL not in text
+
+
+def test_a_statusless_special_node_shows_its_kind_and_a_claim_node_shows_nothing(
+    tmp_path: Path,
+) -> None:
+    pool = tmp_path / "pool" / "node.md"
+    pool.parent.mkdir(parents=True)
+    pool.write_text(node_text(None, title="pool", front={"kind": "probe-pool"}))
+    bare = tmp_path / "bare" / "node.md"
+    bare.parent.mkdir()
+    bare.write_text(node_text(None, title="bare claim"))
+    index = LedgerIndex(tmp_path / "INDEX.md")
+    assert index.state(Node(pool)) == "probe-pool"
+    assert index.state(Node(bare)) == ""
+    assert index.claim(Node(bare)) == "bare claim"
+
+
+def test_a_claim_with_a_pipe_cannot_break_the_table(tmp_path: Path) -> None:
+    note = tmp_path / "piped" / "node.md"
+    note.parent.mkdir()
+    note.write_text(node_text(summary="a | b", title="piped"))
+    table = LedgerIndex(tmp_path / "INDEX.md").table([Node(note)])
+    (row,) = [line for line in table.splitlines() if "piped" in line]
+    assert row == "| [[piped]] | open | a \\| b |"

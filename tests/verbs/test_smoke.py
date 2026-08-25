@@ -130,6 +130,7 @@ def test_cli_help_lists_the_verbs_and_prints_no_result(
     build(space)(["--help"])
     out = capsys.readouterr().out
     assert "settle" in out and "doctor" in out and "judge_brief" in out and "adopt" in out
+    assert "note" in out and "design" in out
     assert "null" not in out
 
 
@@ -153,6 +154,8 @@ def test_main_discovers_the_workspace_from_the_cwd(
         (["log", "demo", "the refuter", "t", "msg"], "pattern"),
         (["run", "a/b", "ok", "echo", "hi"], "single path segments"),
         (["adopt", "ghost", "--source", "nowhere/x.md"], "no note at"),
+        (["note", "nowhere", "a bullet"], "no node named 'nowhere'"),
+        (["design", "nowhere"], "no node named 'nowhere'"),
         (["settle", "demo", "immaculate"], "not a valid Status"),
         (["settle", "demo", "sketched"], "judgment"),
     ],

@@ -88,6 +88,7 @@ def test_doctor_fails_the_gate_only_on_findings_that_contradict_the_workspace(
         ".: invalid_statuses",
         ".: dangling_links",
         ".: unevidenced_claims",
+        ".: stale_index",
     ]
 
 
@@ -97,9 +98,12 @@ def test_doctor_tolerates_untidiness_without_failing(root: Path) -> None:
     (root / _MATH / "orphan").mkdir()
     EvidenceStore(root / _MATH / "demo").append(stamped("demo/ok"))
     EvidenceStore(root / _MATH / "demo").append(stamped("demo/gpu"))
-    certificate = Workspace(root, runner=FakeRunner()).doctor()
+    space = Workspace(root, runner=FakeRunner())
+    space.index()
+    certificate = space.doctor()
     report = result_of(certificate)["workspaces"]["."]
     assert certificate.ok and report["stray_evidence"] and report["unmanifested_blueprints"]
+    assert report["undesigned_evidence"] == ["demo"]
 
 
 def test_doctor_flags_a_claim_whose_newest_evidence_failed(root: Path) -> None:

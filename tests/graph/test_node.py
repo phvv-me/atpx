@@ -1,3 +1,4 @@
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -109,3 +110,42 @@ shadows: width-law, form
 
 def test_relations_are_empty_without_typed_keys() -> None:
     assert written(node_text()).relations == {}
+
+
+def test_the_statement_of_record_is_the_statement_section() -> None:
+    node = written(node_text(body="The claim.") + "\n## Proof\n\nargument\n")
+    assert node.headline == "Demo Node"
+    assert node.statement.startswith("The claim.")
+    assert "argument" not in node.statement and node.conditioned
+
+
+def test_a_pre_contract_node_reads_its_statement_from_under_the_title() -> None:
+    node = written("---\nstatus: open\n---\n\n# Old Claim\n\nImplicit prose.\n\n## Proof\n\nq\n")
+    assert node.statement == "Implicit prose."
+    assert not node.conditioned
+
+
+def test_a_placeholder_statement_does_not_count_as_stated() -> None:
+    assert not written(node_text(body="<!-- one precise claim -->", refutation=None)).stated
+    assert written(node_text()).stated
+
+
+def test_a_node_without_any_heading_has_no_statement() -> None:
+    node = written("---\nstatus: open\n---\n\nProse without a single heading.\n")
+    assert node.statement == "" and not node.stated
+
+
+def test_set_field_replaces_or_inserts_one_frontmatter_line() -> None:
+    node = written(node_text())
+    node.set_field("seeds", value="[2026082500]")
+    node.set_field("seeds", value="[2026082500, 2026082501]")
+    assert node.front.seeds == [2026082500, 2026082501]
+    assert node.text.count("seeds:") == 1
+    assert node.status is Status.OPEN
+
+
+def test_append_evidence_refuses_a_node_without_the_section() -> None:
+    node = written(node_text(evidence=None))
+    with pytest.raises(ValueError, match="no '## Evidence' section"):
+        node.append_evidence("- [run 2026-08-25] landed")
+    assert "landed" not in node.text

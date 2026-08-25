@@ -10,7 +10,7 @@ from ..core.certificate import Certificate
 from ..graph.store import NodeStore
 from ..models.lanes import Lanes
 from ..running.execution import Running
-from ..study.index import ResultsIndex
+from ..study.index import LedgerIndex
 from .foundation import Slug
 
 
@@ -48,11 +48,11 @@ class FoundationState(ABC):
 
     @property
     @abstractmethod
-    def nodes(self) -> NodeStore: ...
+    def ledger_index(self) -> LedgerIndex: ...
 
     @property
     @abstractmethod
-    def results_index(self) -> ResultsIndex: ...
+    def nodes(self) -> NodeStore: ...
 
     @property
     @abstractmethod

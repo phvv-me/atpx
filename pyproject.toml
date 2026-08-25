@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "atpx"
-version = "0.0.3"
+version = "0.0.4"
 description = "Agentic mathematics workbench: every result is a certificate"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -99,16 +99,25 @@ policy = { kind = "numeric", maximum = 12 }
 # every module but `audit.py`, which carries the witness reader beside the
 # `Audit` seam; the exemption would come back only by turning a structural
 # Protocol into an inherited base, which trades a seam for a metric.
-# `tests/core` and `tests/counsel` mirror source directories that the catalog
-# exemption already clears, and a test module declaring several cases can never
-# be a catalog itself, so the ceiling would force the test tree to stop
-# mirroring the code it tests.
+# The `tests/*` entries mirror source directories that the catalog exemption
+# already clears, and a test module declaring several cases can never be a
+# catalog itself, so the ceiling would force the test tree to stop mirroring
+# the code it tests.
+# `src/atpx/graph` is the node contract as a catalog, one module per contract
+# face (status, kind, category, frontmatter, journal, node, store), each a
+# single small definition its consumers import by name. Folding any two trades
+# a legible contract surface for a metric, and the directory grows only when
+# the contract itself grows a face.
 [tool.mcmr.rules."ALL-FILE0003"]
 exclude = [
   "src/atpx/counsel",
+  "src/atpx/graph",
   "src/atpx/rigor/audits",
+  "tests/blueprint",
   "tests/core",
   "tests/counsel",
+  "tests/graph",
+  "tests/study",
 ]
 
 # Both `__getitem__` overloads discriminate a single column name from a list of

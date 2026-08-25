@@ -18,7 +18,7 @@ from ...running.execution import Running
 from ...running.runners.process import ProcessRunner
 from ...running.runners.seam import CommandRunner
 from ...study.doctoring import DoctorReport
-from ...study.index import ResultsIndex
+from ...study.index import LedgerIndex
 from ...support.naming import Naming
 from ..access import SyncVerbs, find_root, find_roots
 from ..foundation import Slug
@@ -88,6 +88,17 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         return str(self.config.get("lean", "lean-build"))
 
     @cached_property
+    def ledger_index(self) -> LedgerIndex:
+        """The generated index artifacts, the markdown note and the graph JSON beside it.
+
+        The manifest's `index` setting names the note root-relative; an
+        undeclared index lives beside the nodes as `INDEX.md`.
+        """
+        configured = self.config.get("index")
+        path = self.root / str(configured) if configured else self.blueprints / "INDEX.md"
+        return LedgerIndex(path)
+
+    @cached_property
     def manifest(self) -> Mapping[str, Mapping[str, JsonValue]]:
         """The parsed root manifest, read once per workspace."""
         return tomllib.loads((self.root / Naming.CONFIG).read_text())
@@ -96,11 +107,6 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     def nodes(self) -> NodeStore:
         """The blueprint node graph."""
         return NodeStore(self.blueprints)
-
-    @cached_property
-    def results_index(self) -> ResultsIndex:
-        """The generated results index note."""
-        return ResultsIndex(self.root / str(self.config.get("index", "research/math/INDEX.md")))
 
     @cached_property
     def root(self) -> Path:
@@ -127,17 +133,24 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         `.` for this one, so a single invocation from the top answers for every project
         beneath it and no caller ever pins a root per project.
 
-        Exit is nonzero once a finding contradicts what a workspace itself asserts, meaning
-        a status outside the ladder, a wikilink to nothing, or a claim whose newest evidence
-        failed, never ran, or predates the node statement it supports. Untidiness that
-        capture-first work is allowed to leave behind, stray data files under `evidence/` or
-        a blueprint with no manifest or no node yet, reports without failing the gate.
+        Exit is nonzero once a finding contradicts what a workspace itself asserts or
+        leaves a node below the completeness contract: a status outside the ladder, a
+        wikilink to nothing, a claim whose newest evidence failed, never ran, or predates
+        the node statement it supports, frontmatter that does not parse, a node without a
+        statement of record or a refutation condition, a sketched node whose linked
+        judgment is missing or names no attacking rung, a statement that drifted from its
+        judgment snapshot, or an index a regeneration would change. Untidiness that
+        capture-first work is allowed to leave behind, stray data files under `evidence/`,
+        a blueprint with no manifest or no node yet, or certificates with no design file,
+        reports without failing the gate.
         """
         reports: dict[str, JsonValue] = {}
         broken: list[JsonValue] = []
         for root in find_roots(self.root):
             space = self if root == self.root else Workspace(root)
-            report = DoctorReport(space.nodes, blueprints=space.blueprints, root=root).compiled()
+            report = DoctorReport(
+                space.nodes, blueprints=space.blueprints, root=root, index=space.ledger_index
+            ).compiled()
             where = root.relative_to(self.root).as_posix()
             reports[where] = report
             broken += [f"{where}: {finding}" for finding in DoctorReport.breakages(report)]

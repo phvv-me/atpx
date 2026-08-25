@@ -12,6 +12,8 @@ from .counsel.records.attempt import Attempt
 from .counsel.records.referral import Referral
 from .counsel.refuter import Refuter
 from .engines import Capability, Engine, SearchError
+from .graph.category import Category
+from .graph.frontmatter import Frontmatter
 from .graph.kind import Kind
 from .graph.node import Node
 from .graph.status import Status
@@ -43,11 +45,13 @@ __all__ = [
     "Attempt",
     "Blueprint",
     "Capability",
+    "Category",
     "Certificate",
     "Claim",
     "Consultation",
     "Engine",
     "EvidenceStore",
+    "Frontmatter",
     "Kind",
     "Lanes",
     "ModelLane",
