@@ -29,6 +29,29 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   like one that calls them evidence.
 - `INDEX.json` carries the blueprints root each node came from beside its
   slug, state and claim, so a downstream renderer can take it as its roster.
+- A `[vocabulary]` table declares the settled words a workspace is willing to
+  settle on, each with the letter and terminal markup a progress line prints
+  and the stance it takes on the prediction behind it, `confirms`, `refutes`,
+  or a defaulted `neither`. atpx owns the declaration because atpx owns the
+  lifecycle, and `atpx settle` refuses a settled status the table leaves out.
+  A trial harness reads the same table out of the same manifest to print its
+  progress line and validate the settled word a receipt stores, so the two
+  vocabularies cannot drift; neither side imports the other.
+- A `[universe]` table declares `root`, `evidence`, `axes`, `probed` and
+  `samples`, where a workspace's trials live and what scopes their coverage.
+  Schema only: atpx never executes a trial, and a hermetic executor reads the
+  same declaration without either side importing the other.
+- `judgments/<node>.ndjson` records counsel standing as data beside the prose,
+  one appended line per ruling carrying `referee`, `date`, `ruling` (FATAL,
+  GAP, MINOR or NONE), the `claim` attacked, the `prose` file it summarizes
+  and the ladder `rung`. `atpx rule` appends one, with the same verb for a
+  model lane and a human referee, and `doctor`'s `unjudged_sketches` reads it
+  instead of regexing prose, falling back to the frontmatter pointers for a
+  node that has none. So an external review becomes evidence in the graph
+  while the reasoning stays prose.
+- `Stream` factors the append-only NDJSON discipline the evidence ledger and
+  the ruling ledger share: one record per line, an append that never rewrites,
+  a lock a caller can widen, and a read that warns past what it cannot decode.
 
 ### Changed
 

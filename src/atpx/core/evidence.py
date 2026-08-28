@@ -1,17 +1,13 @@
-import json
-import warnings
+from functools import cached_property
 from pathlib import Path
 from typing import ClassVar
 
-from filelock import FileLock
 from pydantic import JsonValue
 
 from .certificate import Certificate
 from .exceptions import EvidenceError
 from .provenance import Provenance
-from .tearing import TornLedger
-
-_LOCK_TIMEOUT = 10.0
+from .streaming import Stream
 
 
 class EvidenceStore:
@@ -41,6 +37,11 @@ class EvidenceStore:
         self.hostname = hostname or Provenance.short_hostname()
         self.path = directory / "evidence" / f"{self.hostname}{self.STREAM}"
         self.array = directory / "evidence" / f"{self.hostname}{self.ARRAY}"
+
+    @cached_property
+    def stream(self) -> Stream:
+        """The append-only NDJSON half of this host's ledger."""
+        return Stream(self.path)
 
     @classmethod
     def entries(cls, file: Path) -> list[Certificate]:
@@ -120,35 +121,17 @@ class EvidenceStore:
     def records(cls, file: Path) -> list[tuple[str, JsonValue]]:
         """(where it sits, decoded record) for one ledger file, undecodable parts warned away.
 
-        The stream is one record per line and the array is one record per element, so
-        `where` is `<file>:<line>` for the first and `<file>[<position>]` for the second,
-        which is the whole of what a reader needs to go and look at the damage.
-
-        The stream splits on the newline alone and never on `str.splitlines`, which also
-        breaks at NEL, the line and paragraph separators, and the vertical tab. JSON
-        escapes none of those, so a certificate whose output carried one would otherwise
-        tear itself in half the moment it was read back.
+        The stream is one record per line and reads through `Stream`; the array is one
+        record per element and is decoded whole, since that format cannot be read any
+        other way. So `where` is `<file>:<line>` for the first and `<file>[<position>]`
+        for the second, which is the whole of what a reader needs to go and look at the
+        damage.
 
         file: a ledger file under a blueprint's `evidence/`.
         """
-        text = file.read_text()
         if file.suffix == cls.STREAM:
-            lines = [
-                (f"{file}:{number}", line)
-                for number, line in enumerate(text.split("\n"), start=1)
-                if line.strip()
-            ]
-            return [
-                (where, record)
-                for where, line in lines
-                if (record := cls.__decoded(line, where=where)) is not None
-            ]
-        array = cls.__decoded(text, where=str(file))
-        if array is None:
-            return []
-        if not isinstance(array, list):
-            cls.__skipped(f"{file} is not a certificate array, skipping it")
-            return []
+            return Stream(file).records
+        array = cls.__array(file)
         return [(f"{file}[{position}]", record) for position, record in enumerate(array, start=1)]
 
     @classmethod
@@ -175,16 +158,13 @@ class EvidenceStore:
             raise EvidenceError(
                 f"certificate from {certificate.hostname} cannot enter {self.hostname}'s ledger"
             )
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with FileLock(f"{self.path}.lock", timeout=_LOCK_TIMEOUT):
+        with self.stream.guard:
             for prior in self.read():
                 if prior.hostname != self.hostname:
                     raise EvidenceError(
                         f"{self.hostname}'s ledger holds foreign evidence from {prior.hostname}"
                     )
-            with self.path.open("a", encoding="utf-8") as stream:
-                stream.write(certificate.model_dump_json() + "\n")
-        return self.path
+            return self.stream.append(certificate.model_dump_json())
 
     def read(self) -> list[Certificate]:
         """This host's certificates, the migrated array first and then the stream.
@@ -201,28 +181,19 @@ class EvidenceStore:
         ]
 
     @staticmethod
+    def __array(file: Path) -> list[JsonValue]:
+        """The pre-migration array's elements, empty with a warning when it is not one."""
+        decoded = Stream.decoded(file.read_text(), where=str(file))
+        if isinstance(decoded, list):
+            return decoded
+        if decoded is not None:
+            Stream.skipped(f"{file} is not a certificate array, skipping it")
+        return []
+
+    @staticmethod
     def __certificate(record: JsonValue, where: str) -> Certificate | None:
         """One decoded record as a certificate, None with a warning when it is not one."""
         try:
             return Certificate.model_validate(record)
         except ValueError:
-            return EvidenceStore.__skipped(f"{where} is not a certificate, skipping it")
-
-    @staticmethod
-    def __decoded(text: str, *, where: str) -> JsonValue | None:
-        """One record's JSON, None with a warning when it does not decode."""
-        try:
-            decoded: JsonValue = json.loads(text)
-        except json.JSONDecodeError as error:
-            return EvidenceStore.__skipped(
-                f"{where} does not decode as JSON, skipping it: {error}"
-            )
-        return decoded
-
-    @staticmethod
-    def __skipped(complaint: str) -> None:
-        """Warn that one record is unreadable and read on, so the ledger around it stands.
-
-        complaint: what is wrong and exactly where the record sits.
-        """
-        warnings.warn(complaint, TornLedger, stacklevel=3)
+            return Stream.skipped(f"{where} is not a certificate, skipping it")

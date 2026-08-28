@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import JsonValue
 
 from ...briefing.judgments.ledger import JudgmentLedger
+from ...briefing.judgments.rulings import RulingLedger
 from ...graph.category import Category
 from ...graph.node import Node, statement_of
 from ...graph.status import Status
@@ -106,10 +107,19 @@ class CompletenessLints:
         ]
 
     def unjudged_sketches(self) -> dict[str, JsonValue]:
-        """Sketched nodes whose linked judgment is absent, missing, or names no rung."""
+        """Sketched nodes whose counsel standing is absent, missing, or names no rung.
+
+        A node whose `judgments/<node>.ndjson` holds a recorded ruling has standing that
+        is machine-checkable and answers here directly, whoever ruled and however hard
+        it cut, because the question is whether counsel ruled at all rather than whether
+        the claim survived. A node with none falls back to the frontmatter pointers and
+        a regex over the prose behind them, which is what the record looked like before
+        rulings were recorded as data.
+        """
         report: dict[str, JsonValue] = {}
         for node in self.nodes.canonical():
-            if node.status is not Status.SKETCHED:
+            standing = RulingLedger(node.directory).read(node.name)
+            if node.status is not Status.SKETCHED or standing:
                 continue
             troubles = [
                 trouble

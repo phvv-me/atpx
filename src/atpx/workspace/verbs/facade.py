@@ -10,6 +10,8 @@ from cyclopts import Parameter
 from pydantic import JsonValue
 
 from ...blueprint.manifest import Blueprint
+from ...contracts.universe import Universe
+from ...contracts.vocabulary import Vocabulary
 from ...core.certificate import Certificate
 from ...core.evidence import EvidenceStore
 from ...graph.store import NodeStore
@@ -132,6 +134,22 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     def sync(self) -> SyncVerbs:
         """Blocking access to the async verbs, `workspace().sync.recall(...)`."""
         return SyncVerbs(self)
+
+    @cached_property
+    def universe(self) -> Universe | None:
+        """The `[universe]` trial layout this workspace declares, None when it declares none.
+
+        Read here and executed nowhere: atpx owns the declaration because the workspace
+        manifest is where a project says what shape it is, and whatever runs the trials
+        reads the same table without either side importing the other.
+        """
+        declared = self.manifest.get("universe")
+        return Universe.model_validate(declared) if declared else None
+
+    @cached_property
+    def vocabulary(self) -> Vocabulary:
+        """The settled words the `[vocabulary]` table declares, empty when it declares none."""
+        return Vocabulary.declared(self.manifest.get("vocabulary", {}))
 
     def doctor(self) -> Certificate:
         """What needs repair, here and in every workspace nested inside this one.

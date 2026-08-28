@@ -47,6 +47,7 @@ nav:
   - Concepts: concepts.md
   - Guide: guide.md
   - Workflow: workflow.md
+  - Configuration: config.md
   - API: api.md
   - Release: release.md
 

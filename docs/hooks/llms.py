@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 _SECTIONS: dict[str, list[str]] = {
     "Usage": ["index.md"],
-    "Reference": ["api.md", "release.md"],
+    "Reference": ["config.md", "api.md", "release.md"],
 }
 
 _FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)

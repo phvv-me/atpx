@@ -221,4 +221,7 @@ complete one.
 ## Next
 
 [Workflow](workflow.md) covers the parts of atpx built specifically for an
-agentic prove–refute loop: briefs, judgments, and the counsel lanes.
+agentic prove-refute loop: briefs, judgments, and the counsel lanes.
+[Configuration](config.md) is the reference for every table an `atpx.toml`
+declares, including the three data contracts a trial harness and a referee
+read without either side importing atpx.

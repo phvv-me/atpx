@@ -4,6 +4,9 @@ from pathlib import Path
 from ...blueprint.manifest import Blueprint
 from ...briefing.brief import Briefing
 from ...briefing.judge import JudgeBriefing
+from ...briefing.judgments.ruling import Ruling
+from ...briefing.judgments.rulings import RulingLedger
+from ...briefing.judgments.severity import Severity
 from ...core import git_revision
 from ...graph.journal import LogEntry
 from ...graph.node import Node
@@ -139,6 +142,43 @@ class StudyVerbs(FoundationState):
         line = f"- [{tag} {today()}] {text}"
         node.append_evidence(line)
         return line
+
+    def rule(
+        self,
+        slug: Slug,
+        referee: str,
+        ruling: Severity,
+        *,
+        claim: str = "",
+        prose: str = "",
+        rung: str = "",
+    ) -> str:
+        """Record one judgment on a node, appended to `judgments/<node>.ndjson`.
+
+        The machine-checkable half of counsel, written with the same verb by a model
+        lane and by a human referee, so an external review becomes evidence in the graph
+        instead of a file only a person opens. The reasoning stays prose in whatever
+        `--prose` names; what lands here is the standing `doctor` reads when it asks
+        whether a sketched node was ever actually attacked.
+
+        slug: the blueprint directory name the ruling was made against.
+        referee: the model lane id or the human name that ruled.
+        ruling: how badly it cut, FATAL, GAP, MINOR, or NONE.
+        claim: what was attacked, the node itself when omitted.
+        prose: the review file this line summarizes, node-directory-relative.
+        rung: the ladder position that attacked, empty for a referee outside the ladder.
+        """
+        node = self.nodes.find(slug)
+        recorded = Ruling(
+            referee=referee,
+            date=today(),
+            ruling=ruling,
+            claim=claim or slug,
+            prose=prose,
+            rung=rung,
+        )
+        RulingLedger(node.directory).record(slug, recorded)
+        return recorded.model_dump_json()
 
     def status(self) -> dict[str, list[str]]:
         """Node names grouped by status, malformed or absent values under `invalid`."""

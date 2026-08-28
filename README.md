@@ -65,6 +65,15 @@ blueprints = "research/math"
 runner = "uv run --"   # your environment tool; empty by default: run the command as written
 ```
 
+`blueprints` takes a list as readily as a string, `["math", "experiments"]`,
+and the roots are read as one graph, which is what a program needs once its
+claims of record move between trees. A node carrying `superseded_by` is an
+alias whose claim of record lives at the pointer, so a claim that moved is
+counted once, at its current home. The
+[configuration reference](https://phvv.me/atpx/config/) documents every table,
+including the `[vocabulary]` and `[universe]` data contracts a trial harness
+reads without importing atpx.
+
 ```sh
 atpx run <slug> <claim> <command...>   # run anything: stamp, persist, auto-register
 atpx ball <slug> <claim> -- <command...>   # run, gate on verified ball enclosures, rigor "ball"
@@ -86,6 +95,7 @@ atpx lean <slug> [<target>]    # ingest a Lean build as evidence, auditing sorri
 atpx fit <data.csv> <target>   # PySR symbolic regression, certifying the Pareto front
 atpx recall "<query>"          # federated search, one certificate of hits per source
 atpx log <slug> <who> <tag> "message"     # append one plain journal line
+atpx rule <slug> <referee> <ruling>       # record one FATAL/GAP/MINOR/NONE judgment as data
 atpx adopt <slug> --source <path>         # copy a markdown note into node.md
 atpx index --write             # regenerate the results index note
 ```
@@ -108,7 +118,7 @@ The verbs split into three surfaces:
 
 | Surface | Verbs | One line |
 |---|---|---|
-| court | `settle`, `status`, `graph`, `doctor`, `brief`, `judge_brief`, `log`, `index`, `open` | the mathematician's bench: reads the state, scaffolds nodes, and moves statuses behind evidence gates |
+| court | `settle`, `status`, `graph`, `doctor`, `brief`, `judge_brief`, `log`, `rule`, `index`, `open` | the mathematician's bench: reads the state, scaffolds nodes, and moves statuses behind evidence gates |
 | engine | `run`, `ball`, `smt`, `hunt`, `check`, `verify`, `lean`, `fit`, `recall`, `adopt` | capture-first execution and the rigor gates, every run stamped into the evidence ledgers |
 | counsel | `prove`, `refute` | the model lanes, cheap probes for the affirmative and hostile attack episodes for the negative |
 

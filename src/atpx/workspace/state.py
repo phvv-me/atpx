@@ -6,6 +6,7 @@ from typing import Annotated
 from cyclopts import Parameter
 
 from ..blueprint.manifest import Blueprint
+from ..contracts.vocabulary import Vocabulary
 from ..core.certificate import Certificate
 from ..graph.store import NodeStore
 from ..models.lanes import Lanes
@@ -61,6 +62,10 @@ class FoundationState(ABC):
     @property
     @abstractmethod
     def running(self) -> Running: ...
+
+    @property
+    @abstractmethod
+    def vocabulary(self) -> Vocabulary: ...
 
     @abstractmethod
     def filed(self, path: str) -> Path: ...

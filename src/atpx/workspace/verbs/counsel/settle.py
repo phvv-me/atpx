@@ -1,4 +1,5 @@
 from ....graph.status import Status
+from ....settlement.exceptions import SettleError
 from ....settlement.moving import Settlement
 from ....settlement.petition import Petition
 from ...foundation import ClaimRef, Slug, StatusName
@@ -27,6 +28,10 @@ class SettleVerbs(FoundationState):
         Lean certificate with zero sorries and no flagged risky axioms. The
         free statuses (open, in_progress, abandoned, known) need none.
 
+        A workspace that declares a `[vocabulary]` table narrows the ladder to
+        the settled words it names, and a target outside it is refused here
+        rather than settling quietly into a column nobody reads.
+
         slug: the blueprint directory name holding the node.
         status: the target lifecycle status.
         message: the one-line journal entry body.
@@ -36,6 +41,11 @@ class SettleVerbs(FoundationState):
         lean: claim id of a persisted clean Lean certificate, for verified.
         """
         target, node = Status(status), self.nodes.find(slug)
+        if not self.vocabulary.settles(target):
+            raise SettleError(
+                f"{target.value} is not a word this workspace settles on; "
+                f"[vocabulary] declares {', '.join(self.vocabulary.names)}"
+            )
         petition = Petition(
             message=message,
             judgment=judgment,

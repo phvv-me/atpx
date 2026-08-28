@@ -61,6 +61,7 @@ def build(space: Workspace) -> App:
         space.recall,
         space.log,
         space.note,
+        space.rule,
         space.design,
         space.adopt,
         space.index,

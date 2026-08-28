@@ -23,6 +23,7 @@ def site_after_build(tmp_path: Path) -> Path:
     docs_dir.mkdir()
     (docs_dir / "index.md").write_text("# Home\n\nWelcome.\n")
     (docs_dir / "api.md").write_text("---\ntitle: ignored\n---\nNo heading here.\n")
+    (docs_dir / "config.md").write_text("# Configuration reference\n\nFour tables.\n")
     (docs_dir / "release.md").write_text("# Release notes\n\nv0.0.3.\n")
     site_dir.mkdir()
     on_post_build(_config(docs_dir, site_dir=site_dir))
@@ -34,6 +35,7 @@ def test_on_post_build_indexes_every_page_by_its_heading(site_after_build: Path)
     assert index.startswith("# atpx\n\n> Agentic mathematics workbench\n")
     assert "- [Home](https://phvv.me/atpx/index.md)" in index
     assert "- [api](https://phvv.me/atpx/api/index.md)" in index
+    assert "- [Configuration reference](https://phvv.me/atpx/config/index.md)" in index
     assert "- [Release notes](https://phvv.me/atpx/release/index.md)" in index
 
 
