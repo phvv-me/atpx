@@ -146,6 +146,6 @@ def test_set_field_replaces_or_inserts_one_frontmatter_line() -> None:
 
 def test_append_evidence_refuses_a_node_without_the_section() -> None:
     node = written(node_text(evidence=None))
-    with pytest.raises(ValueError, match="no '## Evidence' section"):
+    with pytest.raises(ValueError, match="no '## Evidence' or '## Ledger' section"):
         node.append_evidence("- [run 2026-08-25] landed")
     assert "landed" not in node.text

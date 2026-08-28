@@ -49,7 +49,7 @@ def test_sketched_demands_a_judgment_file(space: Workspace) -> None:
     line = space.settle("demo", "sketched", "refuter survived.", judgment=str(ruling))
     assert line.endswith(f"refuter survived. judgment {ruling}")
     assert space.nodes.find("demo").status is Status.SKETCHED
-    assert (space.blueprints / "demo" / "judgments" / "demo.json").exists()
+    assert (space.nodes.directory("demo") / "judgments" / "demo.json").exists()
 
 
 def test_sketched_accepts_a_cwd_relative_ruling(
@@ -69,27 +69,27 @@ def test_sketched_snapshots_the_judged_node_in_its_blueprint(space: Workspace) -
     ruling.write_text("NONE.\n")
     space.settle("blocked", "sketched", judgment=str(ruling))
     assert space.nodes.find("blocked").status is Status.SKETCHED
-    assert (space.blueprints / "blocked" / "judgments" / "blocked.json").exists()
+    assert (space.nodes.directory("blocked") / "judgments" / "blocked.json").exists()
 
 
 def test_refuted_demands_a_persisted_counterexample(space: Workspace) -> None:
     with pytest.raises(SettleError, match="certificate"):
         space.settle("demo", "refuted", counterexample="demo/kill")
-    EvidenceStore(space.blueprints / "demo").append(stamped("demo/kill", exit_status=1))
+    EvidenceStore(space.nodes.directory("demo")).append(stamped("demo/kill", exit_status=1))
     line = space.settle("demo", "refuted", "tie broken wrong.", counterexample="kill")
     assert line.endswith("counterexample demo/kill")
     assert space.nodes.find("demo").status is Status.REFUTED
 
 
 def test_refuted_matches_an_exact_claim_id(space: Workspace) -> None:
-    EvidenceStore(space.blueprints / "demo").append(stamped("demo/kill", exit_status=1))
+    EvidenceStore(space.nodes.directory("demo")).append(stamped("demo/kill", exit_status=1))
     space.settle("demo", "refuted", counterexample="demo/kill")
     assert space.nodes.find("demo").status is Status.REFUTED
 
 
 @pytest.mark.parametrize("rigor", ["ball", "smt", "exact"])
 def test_validated_accepts_a_rigorous_certificate(space: Workspace, rigor: str) -> None:
-    EvidenceStore(space.blueprints / "demo").append(
+    EvidenceStore(space.nodes.directory("demo")).append(
         stamped("demo/proof").model_copy(update={"rigor": rigor})
     )
     line = space.settle("demo", "validated", "enclosure holds.", certificate="proof")
@@ -98,7 +98,7 @@ def test_validated_accepts_a_rigorous_certificate(space: Workspace, rigor: str) 
 
 
 def test_validated_refuses_a_sampled_certificate(space: Workspace) -> None:
-    EvidenceStore(space.blueprints / "demo").append(stamped("demo/proof"))
+    EvidenceStore(space.nodes.directory("demo")).append(stamped("demo/proof"))
     with pytest.raises(SettleError, match="rigor 'sampled'"):
         space.settle("demo", "validated", certificate="proof")
     assert space.nodes.find("demo").status is not Status.VALIDATED
@@ -112,7 +112,7 @@ def test_validated_refuses_a_missing_certificate(space: Workspace) -> None:
 
 
 def test_validated_refuses_a_dirty_exit(space: Workspace) -> None:
-    EvidenceStore(space.blueprints / "demo").append(
+    EvidenceStore(space.nodes.directory("demo")).append(
         stamped("demo/proof", exit_status=1).model_copy(update={"rigor": "ball"})
     )
     with pytest.raises(SettleError, match="exited 1"):
@@ -120,7 +120,7 @@ def test_validated_refuses_a_dirty_exit(space: Workspace) -> None:
 
 
 def test_the_demand_walks_past_a_ledger_without_the_match(space: Workspace) -> None:
-    directory = space.blueprints / "demo"
+    directory = space.nodes.directory("demo")
     foreign = stamped("demo/other").model_copy(update={"hostname": "aaa-first"})
     EvidenceStore(directory, hostname="aaa-first").append(foreign)
     EvidenceStore(directory).append(stamped("demo/kill", exit_status=1))
@@ -129,7 +129,7 @@ def test_the_demand_walks_past_a_ledger_without_the_match(space: Workspace) -> N
 
 
 def test_verified_demands_a_clean_lean_certificate(space: Workspace) -> None:
-    store = EvidenceStore(space.blueprints / "demo")
+    store = EvidenceStore(space.nodes.directory("demo"))
     dirty = stamped("demo/lean").model_copy(update={"result": {"sorries": 2}})
     store.append(dirty)
     with pytest.raises(SettleError, match="clean Lean build"):
@@ -144,14 +144,14 @@ def test_verified_refuses_a_flagged_lean_certificate(space: Workspace) -> None:
     tainted = stamped("demo/lean3").model_copy(
         update={"result": {"sorries": 0, "flagged": ["native_decide"]}}
     )
-    EvidenceStore(space.blueprints / "demo").append(tainted)
+    EvidenceStore(space.nodes.directory("demo")).append(tainted)
     with pytest.raises(SettleError, match="risky axioms"):
         space.settle("demo", "verified", lean="demo/lean3")
     assert space.nodes.find("demo").status is not Status.VERIFIED
 
 
 def test_verified_refuses_a_failed_build_and_a_non_audit_certificate(space: Workspace) -> None:
-    store = EvidenceStore(space.blueprints / "demo")
+    store = EvidenceStore(space.nodes.directory("demo"))
     failed = stamped("demo/lean4", exit_status=1).model_copy(
         update={"result": {"sorries": 0, "flagged": []}}
     )

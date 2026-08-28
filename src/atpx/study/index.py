@@ -61,10 +61,20 @@ class LedgerIndex:
         return node.summary or node.headline
 
     def graph(self, nodes: Sequence[Node]) -> dict[str, list[dict[str, str]]]:
-        """The blueprint-shaped graph: nodes with slug, state, and claim; edges from depends."""
+        """The blueprint-shaped graph: nodes with slug, root, state, and claim; edges from depends.
+
+        Every row carries the blueprints root the node was found under, so a reader
+        with several roots knows which tree a slug lives in and can take this file as
+        its roster rather than keeping a second list of its own.
+        """
         ordered = sorted(nodes, key=lambda node: node.name)
         rows = [
-            {"slug": node.name, "state": self.state(node), "claim": self.claim(node)}
+            {
+                "slug": node.name,
+                "root": node.root,
+                "state": self.state(node),
+                "claim": self.claim(node),
+            }
             for node in ordered
         ]
         edges = [

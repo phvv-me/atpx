@@ -12,8 +12,8 @@ def test_check_stamps_and_persists_evidence(space: Workspace, runner: FakeRunner
     certificate = space.sync.check("demo", "ok", seed=7)
     assert certificate.ok and certificate.seed == 7
     assert certificate.claim == "demo/ok"
-    assert runner.calls == [["python", f"{space.blueprints / 'demo'}/checks.py", "ok"]]
-    (entry,) = evidence_entries(space.blueprints / "demo")
+    assert runner.calls == [["python", f"{space.nodes.directory('demo')}/checks.py", "ok"]]
+    (entry,) = evidence_entries(space.nodes.directory("demo"))
     assert entry["claim"] == "demo/ok"
 
 
@@ -29,7 +29,7 @@ def test_check_skips_claims_this_host_cannot_run(
     monkeypatch.setattr("atpx.blueprint.claim._REQUIREMENTS", {"cuda": lambda: False})
     certificate = space.sync.check("demo", "gpu")
     assert certificate.ok and certificate.result == {"skipped": True, "requires": "cuda"}
-    assert runner.calls == [] and evidence_entries(space.blueprints / "demo") == []
+    assert runner.calls == [] and evidence_entries(space.nodes.directory("demo")) == []
 
 
 def test_check_runs_required_claims_when_the_host_qualifies(
@@ -42,9 +42,9 @@ def test_check_runs_required_claims_when_the_host_qualifies(
 def test_run_auto_registers_and_persists(space: Workspace) -> None:
     certificate = space.sync.run("fresh", "probe", "python", "-c", "print(1)")
     assert certificate.ok and certificate.claim == "fresh/probe"
-    manifest = tomllib.loads((space.blueprints / "fresh" / "atpx.toml").read_text())
+    manifest = tomllib.loads((space.nodes.directory("fresh") / "atpx.toml").read_text())
     assert manifest == {"claims": {"probe": "python -c 'print(1)'"}}
-    (entry,) = evidence_entries(space.blueprints / "fresh")
+    (entry,) = evidence_entries(space.nodes.directory("fresh"))
     assert entry["claim"] == "fresh/probe"
 
 
@@ -52,7 +52,7 @@ def test_run_records_the_latest_command(space: Workspace) -> None:
     """The manifest is a record of the latest run, so a new command replaces a stale scalar."""
     space.sync.run("fresh", "probe", "python", "-c", "print(1)")
     space.sync.run("fresh", "probe", "python", "-c", "print(2)")
-    manifest = tomllib.loads((space.blueprints / "fresh" / "atpx.toml").read_text())
+    manifest = tomllib.loads((space.nodes.directory("fresh") / "atpx.toml").read_text())
     assert manifest["claims"]["probe"] == "python -c 'print(2)'"
 
 
@@ -61,7 +61,7 @@ def test_run_replays_a_registered_claim_without_a_command(
 ) -> None:
     certificate = space.sync.run("demo", "ok")
     assert certificate.ok
-    assert runner.calls == [["python", f"{space.blueprints / 'demo'}/checks.py", "ok"]]
+    assert runner.calls == [["python", f"{space.nodes.directory('demo')}/checks.py", "ok"]]
 
 
 def test_run_enforces_the_hard_timeout(root: Path) -> None:

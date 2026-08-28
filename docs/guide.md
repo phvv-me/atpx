@@ -50,6 +50,52 @@ interpreter is already active. `{dir}` in a claim command expands to the node
 directory's full path, so a claim keeps working whatever directory the
 launcher decides to run it from.
 
+## Several blueprint roots
+
+`blueprints` takes a list as readily as a string, and the roots are read as
+one graph rather than as two workspaces:
+
+```toml
+[workspace]
+blueprints = ["math", "experiments"]
+index = "math/INDEX.md"
+```
+
+That is what a program needs once its claims of record move between trees: a
+proof tree it grew up in and an experiment tree it now lives in. Roots are
+searched in declaration order, so a slug two roots both hold resolves to the
+first, and the first root is where `atpx open` puts a fresh blueprint and
+where `atpx run` puts a slug nothing holds yet. A slug an existing root
+already holds is always reached there, so no verb ever opens a second copy of
+a node under the first root.
+
+A migration leaves a pointer behind rather than a duplicate. A stub declares
+
+```yaml
+superseded_by: experiments/x_structure
+```
+
+and atpx then treats that node as an ALIAS: `atpx status`, `atpx graph`, the
+lints and the generated index all read the node of record and count the claim
+exactly once, a wikilink to the old slug resolves to the new node so a
+dependency written before the migration still lands where it meant to, and
+`atpx note` on the stub is refused naming the node of record. The pointer is
+a slug, or a `<root>/<slug>` path when the claim also changed trees, and it
+is linted like any other typed relation, so a supersession pointing at
+nothing is a dangling link. `atpx doctor` reports the whole alias table under
+`superseded_nodes` without failing on it.
+
+`INDEX.json` carries the root each node came from beside its slug, state and
+claim, so a downstream renderer can take that file as its roster instead of
+keeping a second list of its own.
+
+## Where the readings go
+
+A node's readings live under `## Evidence`, or under `## Ledger`, which is
+the same section by another name. `atpx note` appends to whichever one the
+node declares and refuses a node that declares neither, rather than
+restructuring it.
+
 ## Scaffolding a node
 
 ```sh

@@ -27,7 +27,7 @@ def test_open_templates_every_node_section(space: Workspace, heading: str) -> No
 
 def test_open_scaffolds_probes_manifest_and_the_claim_spec(space: Workspace) -> None:
     space.open("locking-kernel", kind="lemma")
-    directory = space.blueprints / "locking-kernel"
+    directory = space.nodes.directory("locking-kernel")
     assert (directory / "probes").is_dir()
     assert (directory / "atpx.toml").read_text() == "[claims]\n"
     spec = (directory / _CLAIM_SPEC).read_text()
@@ -39,7 +39,7 @@ def test_open_scaffolds_probes_manifest_and_the_claim_spec(space: Workspace) -> 
 )
 def test_open_templates_every_spec_section(space: Workspace, heading: str) -> None:
     space.open("locking-kernel", kind="lemma")
-    spec = (space.blueprints / "locking-kernel" / _CLAIM_SPEC).read_text()
+    spec = (space.nodes.directory("locking-kernel") / _CLAIM_SPEC).read_text()
     assert heading in spec
 
 

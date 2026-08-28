@@ -21,14 +21,12 @@ class CompletenessLints:
     from its judgment snapshot is certified by nothing.
     """
 
-    def __init__(self, nodes: NodeStore, *, blueprints: Path, root: Path) -> None:
+    def __init__(self, nodes: NodeStore, *, root: Path) -> None:
         """nodes: the blueprint node graph whose contract is linted.
 
-        blueprints: the blueprints root directory link targets resolve under.
         root: the workspace root judgment pointers may be relative to.
         """
         self.nodes = nodes
-        self.blueprints = blueprints
         self.root = root
 
     def compiled(self) -> dict[str, JsonValue]:
@@ -44,7 +42,12 @@ class CompletenessLints:
         }
 
     def dangling(self) -> dict[str, JsonValue]:
-        """Wikilinks, typed relations, and depends pointing at slugs with no blueprint."""
+        """Wikilinks, typed relations, and depends pointing at slugs with no blueprint.
+
+        Read over every node including the superseded stubs, since a stub whose
+        `superseded_by` points at nothing is exactly the dangling pointer this lint
+        exists to catch.
+        """
         report: dict[str, JsonValue] = {}
         for node in self.nodes.nodes():
             targets = dict.fromkeys(
@@ -54,7 +57,7 @@ class CompletenessLints:
                     *node.front.depends,
                 ]
             )
-            missing = [slug for slug in targets if not (self.blueprints / slug).is_dir()]
+            missing = [slug for slug in targets if not self.nodes.holds(slug)]
             if missing:
                 report[node.name] = list[JsonValue](missing)
         return report
@@ -67,7 +70,7 @@ class CompletenessLints:
         until the node is re-judged.
         """
         report: dict[str, JsonValue] = {}
-        for node in self.nodes.nodes():
+        for node in self.nodes.canonical():
             snapshot = JudgmentLedger(node.directory).latest(node.name)
             if snapshot is not None and statement_of(snapshot.text) != node.statement:
                 report[node.name] = "statement differs from its judgment snapshot"
@@ -98,14 +101,14 @@ class CompletenessLints:
         """Claim nodes stating no explicit refutation condition anywhere in their text."""
         return [
             node.name
-            for node in self.nodes.nodes()
+            for node in self.nodes.canonical()
             if node.front.category is not Category.PROBE_POOL and not node.conditioned
         ]
 
     def unjudged_sketches(self) -> dict[str, JsonValue]:
         """Sketched nodes whose linked judgment is absent, missing, or names no rung."""
         report: dict[str, JsonValue] = {}
-        for node in self.nodes.nodes():
+        for node in self.nodes.canonical():
             if node.status is not Status.SKETCHED:
                 continue
             troubles = [
@@ -121,7 +124,7 @@ class CompletenessLints:
         """Claim nodes whose statement of record is empty or placeholder-only."""
         return [
             node.name
-            for node in self.nodes.nodes()
+            for node in self.nodes.canonical()
             if node.front.category is not Category.PROBE_POOL and not node.stated
         ]
 

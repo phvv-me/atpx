@@ -25,7 +25,7 @@ def test_ball_verb_stamps_ball_rigor_and_persists(root: Path) -> None:
     certificate = space.sync.ball("fresh", "octave", "python", "probe.py")
     assert certificate.ok and certificate.rigor == "ball"
     assert violation_of(certificate) == ""
-    (entry,) = evidence_entries(space.blueprints / "fresh")
+    (entry,) = evidence_entries(space.nodes.directory("fresh"))
     assert entry["rigor"] == "ball" and entry["claim"] == "fresh/octave"
 
 
@@ -64,7 +64,7 @@ def test_lab_verb_records_the_trial_identity_the_experiment_reported(root: Path)
     assert certificate.ok and certificate.rigor == "lab"
     (witness,) = result_of(certificate)["witnesses"]
     assert witness["run_id"] == "9d3c1a77b2e40f5b"
-    (entry,) = evidence_entries(space.blueprints / "fresh")
+    (entry,) = evidence_entries(space.nodes.directory("fresh"))
     assert entry["rigor"] == "lab" and entry["claim"] == "fresh/collapse"
 
 
@@ -90,7 +90,7 @@ def test_hunt_reads_exit_zero_as_a_found_counterexample(
     certificate = space.sync.hunt("fresh", "doubling", "python", "probe.py")
     assert certificate.ok and certificate.rigor == "sampled"
     assert "counterexample FOUND" in capsys.readouterr().out
-    (entry,) = evidence_entries(space.blueprints / "fresh")
+    (entry,) = evidence_entries(space.nodes.directory("fresh"))
     assert entry["rigor"] == "sampled"
 
 

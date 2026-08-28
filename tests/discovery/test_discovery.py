@@ -41,7 +41,7 @@ def test_fit_certifies_the_pareto_front(space: Workspace, lane: Sequence[FakeReg
     assert result["holdout"] == {"mode": "random", "fraction": 0.2, "driver": None}
     assert result[_OPERATORS] == {"unary": [], "binary": []}
     assert result["features"] == ["rate"]
-    claims = [entry.claim for entry in EvidenceStore(space.blueprints / "demo").read()]
+    claims = [entry.claim for entry in EvidenceStore(space.nodes.directory("demo")).read()]
     assert "fit data.csv" in claims
 
 
@@ -102,7 +102,7 @@ def test_fit_without_a_slug_returns_an_unpersisted_certificate(
 ) -> None:
     certificate = space.fit("data.csv", "distortion")
     assert certificate.ok
-    assert EvidenceStore.ledgers(space.blueprints / "demo") == {}
+    assert EvidenceStore.ledgers(space.nodes.directory("demo")) == {}
 
 
 def test_fit_is_honest_about_a_dormant_lane_and_never_persists_it(
@@ -112,7 +112,7 @@ def test_fit_is_honest_about_a_dormant_lane_and_never_persists_it(
     certificate = space.fit("data.csv", "distortion", slug="demo")
     assert certificate.exit_status == 1
     assert "pysr" in json.dumps(certificate.result)
-    assert EvidenceStore.ledgers(space.blueprints / "demo") == {}
+    assert EvidenceStore.ledgers(space.nodes.directory("demo")) == {}
 
 
 def test_fit_is_dormant_without_pysr(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -18,7 +18,7 @@ def test_judgment_ledger_roundtrips_and_starts_empty(root: Path) -> None:
 
 
 def test_brief_bundles_node_deps_evidence_judgment_and_files(space: Workspace) -> None:
-    store = EvidenceStore(space.blueprints / "demo")
+    store = EvidenceStore(space.nodes.directory("demo"))
     store.append(stamped(claim="demo/ok"))
     space.log("demo", "refuter", "ties", "no counterexample found.")
     text = space.brief("demo")
@@ -31,7 +31,7 @@ def test_brief_bundles_node_deps_evidence_judgment_and_files(space: Workspace) -
 
 def test_brief_marks_current_evidence_and_missing_judgment(space: Workspace) -> None:
     current = stamped(claim="demo/ok").model_copy(update={"git_rev": "unknown"})
-    EvidenceStore(space.blueprints / "demo").append(current)
+    EvidenceStore(space.nodes.directory("demo")).append(current)
     text = space.brief("demo")
     assert "(current)" in text
     assert "No judgment logged yet." in text
@@ -65,12 +65,12 @@ def test_judge_brief_before_any_judgment(space: Workspace) -> None:
 
 
 def test_judge_brief_diffs_the_node_and_lists_newer_claims(space: Workspace) -> None:
-    ruling = space.blueprints / "demo" / "ruling.md"
+    ruling = space.nodes.directory("demo") / "ruling.md"
     ruling.write_text("NONE.\n")
     space.settle("demo", "sketched", "ruling.", judgment=str(ruling))
     space.log("demo", "prover", "lemma", "a new lemma landed.")
     newer = stamped(claim="demo/ok").model_copy(update={"timestamp": "2099-01-01T00:00:00+00:00"})
-    EvidenceStore(space.blueprints / "demo").append(newer)
+    EvidenceStore(space.nodes.directory("demo")).append(newer)
     text = space.judge_brief("demo")
     assert "Last judged 2" in text
     assert "+- [prover/lemma" in text
@@ -78,21 +78,21 @@ def test_judge_brief_diffs_the_node_and_lists_newer_claims(space: Workspace) -> 
 
 
 def test_judge_brief_counts_unprefixed_claims_under_their_full_id(space: Workspace) -> None:
-    ruling = space.blueprints / "demo" / "ruling.md"
+    ruling = space.nodes.directory("demo") / "ruling.md"
     ruling.write_text("NONE.\n")
     space.settle("demo", "sketched", "ruling.", judgment=str(ruling))
     fit = stamped(claim="fit data.csv").model_copy(
         update={"timestamp": "2099-01-01T00:00:00+00:00"}
     )
-    EvidenceStore(space.blueprints / "demo").append(fit)
+    EvidenceStore(space.nodes.directory("demo")).append(fit)
     text = space.judge_brief("demo")
     assert "- fit data.csv gained 1 certificates" in text
 
 
 def test_judge_brief_with_nothing_new_says_so(space: Workspace) -> None:
     old = stamped(claim="demo/ok")
-    EvidenceStore(space.blueprints / "demo").append(old)
-    ruling = space.blueprints / "demo" / "ruling.md"
+    EvidenceStore(space.nodes.directory("demo")).append(old)
+    ruling = space.nodes.directory("demo") / "ruling.md"
     ruling.write_text("NONE.\n")
     space.settle("demo", "sketched", "ruling.", judgment=str(ruling))
     text = space.judge_brief("demo")

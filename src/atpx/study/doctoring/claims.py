@@ -67,13 +67,15 @@ class ClaimLints:
 
     @cached_property
     def __evidence(self) -> list[tuple[Node, str, Certificate | None]]:
-        """Every declared claim of every node, paired with its newest certificate or None.
+        """Every declared claim of every node of record, paired with its newest certificate.
 
         The one walk the three evidence lints share, read once per report so a blueprint's
-        manifest and its ledgers are not reopened per lint.
+        manifest and its ledgers are not reopened per lint. Superseded stubs are left out:
+        their claims are frozen history certified where they were run, so holding them to
+        the freshness of a statement that has moved would report a repair nobody can make.
         """
         rows = []
-        for node in self.nodes.nodes():
+        for node in self.nodes.canonical():
             if not (node.directory / Naming.CONFIG).exists():
                 continue
             latest = EvidenceStore.newest(node.directory, node.name)

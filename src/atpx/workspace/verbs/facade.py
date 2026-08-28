@@ -57,9 +57,18 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         self.runner = runner
 
     @cached_property
-    def blueprints(self) -> Path:
-        """The blueprints root directory, where every node lives."""
-        return self.root / str(self.config.get("blueprints", "research/math"))
+    def blueprints(self) -> Sequence[Path]:
+        """The declared blueprint roots, in declaration order, where every node lives.
+
+        A workspace declares one root or several. Several is what a program needs once
+        its claims of record move between trees, `blueprints = ["math", "experiments"]`,
+        and the whole graph is then read as their union rather than as two workspaces.
+        A bare string still declares one root, so nothing that names a single tree has
+        to change. The first root is where a fresh blueprint lands.
+        """
+        declared = self.config.get("blueprints", "research/math")
+        names = declared if isinstance(declared, list) else [declared]
+        return [self.root / str(name) for name in names]
 
     @cached_property
     def config(self) -> Mapping[str, JsonValue]:
@@ -95,7 +104,7 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         undeclared index lives beside the nodes as `INDEX.md`.
         """
         configured = self.config.get("index")
-        path = self.root / str(configured) if configured else self.blueprints / "INDEX.md"
+        path = self.root / str(configured) if configured else self.nodes.path / "INDEX.md"
         return LedgerIndex(path)
 
     @cached_property
@@ -106,7 +115,7 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     @cached_property
     def nodes(self) -> NodeStore:
         """The blueprint node graph."""
-        return NodeStore(self.blueprints)
+        return NodeStore(*self.blueprints)
 
     @cached_property
     def root(self) -> Path:
@@ -148,9 +157,7 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         broken: list[JsonValue] = []
         for root in find_roots(self.root):
             space = self if root == self.root else Workspace(root)
-            report = DoctorReport(
-                space.nodes, blueprints=space.blueprints, root=root, index=space.ledger_index
-            ).compiled()
+            report = DoctorReport(space.nodes, root=root, index=space.ledger_index).compiled()
             where = root.relative_to(self.root).as_posix()
             reports[where] = report
             broken += [f"{where}: {finding}" for finding in DoctorReport.breakages(report)]
@@ -174,11 +181,15 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     def register(self, slug: str, *, claim: str, argv: Sequence[str] | None = None) -> Blueprint:
         """Load a blueprint, creating the directory, manifest, or claim as needed.
 
-        slug: the blueprint directory name under the blueprints root.
+        A slug some root already holds is registered there, so a run against an
+        existing node never opens a second copy of it under the first root.
+
+        slug: the blueprint directory name under one of the blueprint roots.
         claim: the claim to ensure exists, when `argv` supplies its command.
         argv: the command tokens to register for a claim not yet in the manifest.
         """
-        return Blueprint.register(self.blueprints, slug=slug, claim=claim, argv=argv)
+        home = self.nodes.directory(slug).parent
+        return Blueprint.register(home, slug=slug, claim=claim, argv=argv)
 
     async def run(
         self,

@@ -31,7 +31,7 @@ def test_the_registry_is_workspace_wide_and_the_allocation_is_recorded(root: Pat
     space.design("dep")
     assert space.nodes.find("demo").front.seeds == [_BASE]
     assert space.nodes.find("dep").front.seeds == [_BASE + 1]
-    assert str(_BASE + 1) in (space.blueprints / "dep" / f"design-{today()}.md").read_text()
+    assert str(_BASE + 1) in (space.nodes.directory("dep") / f"design-{today()}.md").read_text()
 
 
 def test_a_second_design_on_the_same_day_is_refused(root: Path) -> None:

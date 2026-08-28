@@ -34,8 +34,9 @@ class Frontmatter(FrozenModel):
     block or a malformed field lands in `problems` for `doctor` to report, and
     never raises. `depends` names the slugs the statement leans on, `serves`
     the papers or experiments the node feeds, `seeds` the seed bases allocated
-    to this node (the workspace-wide registry `design` draws from), and
-    `judgments` the ruling files a sketched status rests on.
+    to this node (the workspace-wide registry `design` draws from), `judgments`
+    the ruling files a sketched status rests on, and `superseded_by` the node
+    of record a stub now defers to, a slug or a `<root>/<slug>` pointer.
     """
 
     status: str | None = None
@@ -44,6 +45,7 @@ class Frontmatter(FrozenModel):
     serves: list[str] = []
     seeds: list[int] = []
     judgments: list[str] = []
+    superseded_by: str = ""
     problems: list[str] = []
 
     @property
@@ -92,5 +94,6 @@ class Frontmatter(FrozenModel):
             serves=cls.listed(raw.get("serves", "")),
             seeds=seeds,
             judgments=cls.listed(raw.get("judgments", "")),
+            superseded_by=raw.get("superseded_by", ""),
             problems=problems,
         )

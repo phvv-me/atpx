@@ -61,7 +61,7 @@ class CheckVerbs(FoundationState):
         seed: RNG seed to record when the claim script used one.
         background: detach the run instead of waiting for it.
         """
-        blueprint = Blueprint.load(self.blueprints / slug)
+        blueprint = Blueprint.load(self.nodes.directory(slug))
         if background:
             return BackgroundChecks(blueprint, self.root, self.launcher).submit(claim)
         spec = blueprint.claim(claim)
@@ -76,7 +76,7 @@ class CheckVerbs(FoundationState):
 
         slug: the blueprint directory name under the blueprints root.
         """
-        blueprint = Blueprint.load(self.blueprints / slug)
+        blueprint = Blueprint.load(self.nodes.directory(slug))
         return BackgroundChecks(blueprint, self.root, self.launcher).listing()
 
     async def gated(
@@ -203,12 +203,13 @@ class CheckVerbs(FoundationState):
 
         slug: one blueprint to sweep, defaulting to every blueprint with a manifest.
         """
-        slugs = (
-            [slug]
-            if slug
-            else sorted(p.parent.name for p in self.blueprints.glob(f"*/{Naming.CONFIG}"))
-        )
-        sweep = FreshnessSweep(self.running, self.blueprints)
+        manifested = {
+            path.parent.name
+            for root in self.blueprints
+            for path in root.glob(f"*/{Naming.CONFIG}")
+        }
+        slugs = [slug] if slug else sorted(manifested)
+        sweep = FreshnessSweep(self.running, self.nodes)
         report, failures = await sweep.report(slugs, git_revision(self.root))
         return Certificate.stamp(
             claim=f"verify {slug}" if slug else "verify",

@@ -46,7 +46,7 @@ def test_background_check_writes_the_submission_record(
     certificate = space.sync.check("demo", "ok", background=True)
     result = certificate.result
     assert isinstance(result, dict)
-    records = sorted((space.blueprints / "demo" / "checks").glob("*.json"))
+    records = sorted((space.nodes.directory("demo") / "checks").glob("*.json"))
     submission = Submission.model_validate_json(records[0].read_text())
     assert submission.claim == "ok" and submission.pid == result["pid"]
 
@@ -56,7 +56,7 @@ def test_background_check_validates_the_claim_before_detaching(
 ) -> None:
     with pytest.raises(KeyError, match="known claims"):
         space.sync.check("demo", "missing", background=True)
-    assert not (space.blueprints / "demo" / "checks").exists()
+    assert not (space.nodes.directory("demo") / "checks").exists()
 
 
 def test_checks_reports_pending_then_landed(space: Workspace, echoing_atpx: Path) -> None:
@@ -65,7 +65,7 @@ def test_checks_reports_pending_then_landed(space: Workspace, echoing_atpx: Path
     assert pending["claim"] == "ok" and pending["state"] == "pending"
     future = {"timestamp": "2099-01-01T00:00:00.000000Z"}
     landed = stamped(claim="demo/ok").model_copy(update=future)
-    EvidenceStore(space.blueprints / "demo").append(landed)
+    EvidenceStore(space.nodes.directory("demo")).append(landed)
     (row,) = space.checks("demo")
     assert row["state"] == "landed" and row["submitted"] == pending["submitted"]
 
@@ -74,7 +74,7 @@ def test_checks_ignore_certificates_for_other_claims(space: Workspace, echoing_a
     space.sync.check("demo", "ok", background=True)
     future = {"timestamp": "2099-01-01T00:00:00.000000Z"}
     other = stamped(claim="demo/gpu").model_copy(update=future)
-    EvidenceStore(space.blueprints / "demo").append(other)
+    EvidenceStore(space.nodes.directory("demo")).append(other)
     (row,) = space.checks("demo")
     assert row["state"] == "pending"
 
@@ -87,7 +87,7 @@ def test_checks_never_land_on_a_claim_sharing_a_prefix(
     shared = stamped(claim="demo/okx").model_copy(
         update={"timestamp": "2099-01-01T00:00:00.000000Z"}
     )
-    EvidenceStore(space.blueprints / "demo").append(shared)
+    EvidenceStore(space.nodes.directory("demo")).append(shared)
     (row,) = space.checks("demo")
     assert row["state"] == "pending"
 

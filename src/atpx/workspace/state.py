@@ -32,7 +32,7 @@ class FoundationState(ABC):
 
     @property
     @abstractmethod
-    def blueprints(self) -> Path: ...
+    def blueprints(self) -> Sequence[Path]: ...
 
     @property
     @abstractmethod

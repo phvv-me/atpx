@@ -38,7 +38,7 @@ def test_lean_registers_a_missing_blueprint(root: Path) -> None:
     space = Workspace(root, runner=FakeRunner(output="ok\n"))
     certificate = space.sync.lean("greenfield")
     assert certificate.ok
-    assert (space.blueprints / "greenfield" / "atpx.toml").exists()
+    assert (space.nodes.directory("greenfield") / "atpx.toml").exists()
 
 
 def test_lean_passes_the_target_to_the_task(space: Workspace, runner: FakeRunner) -> None:

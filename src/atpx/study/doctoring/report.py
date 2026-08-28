@@ -40,18 +40,15 @@ class DoctorReport:
         "stale_index",
     )
 
-    def __init__(
-        self, nodes: NodeStore, *, blueprints: Path, root: Path, index: LedgerIndex
-    ) -> None:
+    def __init__(self, nodes: NodeStore, *, root: Path, index: LedgerIndex) -> None:
         """nodes: the blueprint node graph whose statuses are linted.
 
-        blueprints: the blueprints root directory.
         root: the workspace root paths report relative to.
         index: the workspace's generated index artifacts, checked for currency.
         """
-        self.completeness = CompletenessLints(nodes, blueprints=blueprints, root=root)
+        self.completeness = CompletenessLints(nodes, root=root)
         self.claims = ClaimLints(nodes, root=root)
-        self.tidiness = TidinessLints(nodes, blueprints=blueprints, root=root, index=index)
+        self.tidiness = TidinessLints(nodes, root=root, index=index)
 
     @classmethod
     def breakages(cls, report: Mapping[str, JsonValue]) -> list[str]:

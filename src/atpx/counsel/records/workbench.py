@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Protocol
 
@@ -14,7 +15,7 @@ class Workbench(Protocol):
     """
 
     @property
-    def blueprints(self) -> Path: ...
+    def blueprints(self) -> Sequence[Path]: ...
 
     @property
     def nodes(self) -> NodeStore: ...

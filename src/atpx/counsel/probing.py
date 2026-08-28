@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -70,15 +71,16 @@ def gate(source: str, *, stdout: str) -> str | None:
     return None
 
 
-def tactics(blueprints: Path) -> str:
-    """The shared probe-writing tactics, empty when the blueprints root carries none.
+def tactics(blueprints: Sequence[Path]) -> str:
+    """The shared probe-writing tactics, empty when no blueprints root carries them.
 
-    blueprints: the blueprints root directory holding `TACTICS.md`.
+    The first declared root that holds a `TACTICS.md` answers, so a workspace with
+    several roots writes the lessons once rather than once per tree.
+
+    blueprints: the declared blueprint roots, in declaration order.
     """
-    try:
-        return (blueprints / _TACTICS).read_text()
-    except FileNotFoundError:
-        return ""
+    found = next((root / _TACTICS for root in blueprints if (root / _TACTICS).exists()), None)
+    return found.read_text() if found else ""
 
 
 def charge(contract: str, *, lessons: str) -> str:

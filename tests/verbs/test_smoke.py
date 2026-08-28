@@ -43,7 +43,7 @@ def test_cli_runs_an_async_verb_on_its_own_loop(
     build(space)(["check", "demo", "ok", "--seed", "7"])
     certificate = json.loads(capsys.readouterr().out)
     assert certificate["claim"] == "demo/ok" and certificate["seed"] == 7
-    assert runner.calls == [["python", f"{space.blueprints / 'demo'}/checks.py", "ok"]]
+    assert runner.calls == [["python", f"{space.nodes.directory('demo')}/checks.py", "ok"]]
 
 
 def test_cli_run_passes_hyphenated_command_tokens_verbatim(

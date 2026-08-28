@@ -54,7 +54,7 @@ class Prover:
         timeout: probe wall-clock cap in seconds, the measured default when None.
         """
         deadline = cap(timeout)
-        directory = space.blueprints / slug
+        directory = space.nodes.directory(slug)
         probe_path = directory / "probes" / f"{claim}.py"
         relative = probe_path.relative_to(space.root).as_posix()
         budget = (

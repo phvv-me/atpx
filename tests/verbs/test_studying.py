@@ -37,7 +37,7 @@ def test_graph_lists_the_frontier(space: Workspace) -> None:
 def test_log_appends_a_journal_line(space: Workspace) -> None:
     line = space.log("demo", "refuter", "numeric", "no counterexample up to 1e6.")
     assert line.startswith("- [refuter/numeric ")
-    assert line in (space.blueprints / "demo" / "node.md").read_text()
+    assert line in (space.nodes.directory("demo") / "node.md").read_text()
 
 
 def test_log_refuses_an_entry_that_would_not_round_trip(space: Workspace) -> None:
@@ -67,7 +67,7 @@ def test_index_writes_the_table_and_the_graph_beside_it(space: Workspace) -> Non
     text = space.index()
     assert "| [[dep]] | sketched | a settled dep |" in text
     assert text == space.ledger_index.path.read_text()
-    assert space.ledger_index.graph_path == space.blueprints / "INDEX.json"
+    assert space.ledger_index.graph_path == space.nodes.path / "INDEX.json"
     assert '"slug": "dep"' in space.ledger_index.graph_path.read_text()
 
 
@@ -81,13 +81,13 @@ def test_index_moves_the_hand_written_body_under_the_manual_section(space: Works
 def test_note_appends_a_dated_bullet_to_the_evidence_section(space: Workspace) -> None:
     line = space.note("demo", "n1 run 1 exit 0 PASS", tag="run")
     assert line.startswith("- [run ") and line.endswith("] n1 run 1 exit 0 PASS")
-    text = (space.blueprints / "demo" / "node.md").read_text()
+    text = (space.nodes.directory("demo") / "node.md").read_text()
     evidence = text.partition("## Evidence")[2].partition("## Log")[0]
     assert line in evidence
 
 
 def test_note_never_touches_anything_above_the_evidence_section(space: Workspace) -> None:
-    node = space.blueprints / "demo" / "node.md"
+    node = space.nodes.directory("demo") / "node.md"
     above_before = node.read_text().partition("## Evidence")[0]
     space.note("demo", "first")
     space.note("demo", "second")
@@ -97,9 +97,9 @@ def test_note_never_touches_anything_above_the_evidence_section(space: Workspace
 
 
 def test_note_refuses_a_node_without_an_evidence_section(space: Workspace) -> None:
-    node = space.blueprints / "dep" / "node.md"
+    node = space.nodes.directory("dep") / "node.md"
     node.write_text(node.read_text().replace("## Evidence\n\n", ""))
-    with pytest.raises(ValueError, match="no '## Evidence' section"):
+    with pytest.raises(ValueError, match="no '## Evidence' or '## Ledger' section"):
         space.note("dep", "nowhere to land")
 
 
@@ -113,7 +113,7 @@ def test_note_refuses_a_bullet_that_would_not_round_trip(space: Workspace) -> No
 def test_design_scaffolds_a_pre_registration_and_allocates_a_seed(space: Workspace) -> None:
     filed = space.design("demo")
     path = space.root / filed
-    assert path.parent == space.blueprints / "demo" and path.name.startswith("design-")
+    assert path.parent == space.nodes.directory("demo") and path.name.startswith("design-")
     text = path.read_text()
     headings = {line for line in text.splitlines() if line.startswith("## ")}
     fields = {"Hypothesis", "Observable", "Conditions", "Decision rule", "Seed base"}

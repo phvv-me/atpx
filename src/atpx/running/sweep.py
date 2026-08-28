@@ -1,24 +1,24 @@
 from collections.abc import Sequence
-from pathlib import Path
 
 from pydantic import JsonValue
 
 from ..blueprint.manifest import Blueprint
 from ..core.certificate import Certificate
 from ..core.evidence import EvidenceStore
+from ..graph.store import NodeStore
 from .execution import Running
 
 
 class FreshnessSweep:
     """One `verify` pass: re-run runnable claims, persist certificates, flag stale evidence."""
 
-    def __init__(self, running: Running, blueprints: Path) -> None:
+    def __init__(self, running: Running, nodes: NodeStore) -> None:
         """running: the claim execution seam.
 
-        blueprints: the blueprints root directory.
+        nodes: the blueprint node graph, which resolves a slug to its own root.
         """
         self.running = running
-        self.blueprints = blueprints
+        self.nodes = nodes
 
     def entry(self, certificate: Certificate | None, *, stale: bool) -> dict[str, JsonValue]:
         """One claim's report line: its state after the sweep and its stale flag."""
@@ -40,7 +40,7 @@ class FreshnessSweep:
         report: dict[str, JsonValue] = {}
         failures = 0
         for name in slugs:
-            blueprint = Blueprint.load(self.blueprints / name)
+            blueprint = Blueprint.load(self.nodes.directory(name))
             stale = stale_claims(blueprint, revision)
             runnable = [claim for claim, spec in blueprint.claims.items() if spec.is_runnable()]
             fresh = await self.running.swept(blueprint, runnable)

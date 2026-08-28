@@ -6,6 +6,30 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ## Unreleased
 
+### Added
+
+- `[workspace] blueprints` accepts a list of roots, `["math", "experiments"]`,
+  read as one graph rather than as two workspaces, which is what a program
+  needs once its claims of record move between trees. A bare string still
+  names one root. Roots are searched in declaration order, the first is where
+  a fresh blueprint lands, and a slug an existing root already holds is always
+  reached there, so no verb opens a second copy of a node.
+- `superseded_by` is a typed frontmatter relation. A node carrying it is an
+  ALIAS whose claim of record lives at the pointer, a slug or a
+  `<root>/<slug>` path: `atpx status`, `atpx graph`, the completeness and
+  claim lints and the generated index all read the node of record and count
+  the claim exactly once, a wikilink to the superseded slug resolves to the
+  node of record so a dependency written before a migration still lands where
+  it meant to, and `atpx note` on a stub is refused naming the canonical.
+  The pointer is linted like any other relation, so a supersession pointing at
+  nothing is a dangling link, and `doctor` reports the alias table under
+  `superseded_nodes` without failing on it.
+- `## Ledger` is accepted wherever `## Evidence` is, one reader with two
+  aliases, so a node that calls its readings a ledger takes a note exactly
+  like one that calls them evidence.
+- `INDEX.json` carries the blueprints root each node came from beside its
+  slug, state and claim, so a downstream renderer can take it as its roster.
+
 ### Changed
 
 - The evidence ledger is append-only NDJSON at `evidence/<hostname>.ndjson`,

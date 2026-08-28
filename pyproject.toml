@@ -91,6 +91,17 @@ batch_size = 8
 [tool.mcmr.rules."ALL-CLAS0005"]
 policy = { kind = "numeric", maximum = 12 }
 
+# `Frontmatter` is a serialized record rather than a service object, and the rule's own
+# Exceptions section says a project owns that ceiling for exactly this reason: the field
+# count is not a design choice here, it is the number of keys the `node.md` frontmatter
+# contract declares. One key, one field, read tolerantly, is what makes the parse lossless
+# and what lets `doctor` report a malformed value by name; folding two keys into one field
+# to reach seven would trade a legible contract for the metric. 8 is the contract's width
+# today (status, kind, depends, serves, seeds, judgments, superseded_by, problems), so the
+# ceiling tracks it and still catches the next unconsidered addition.
+[tool.mcmr.rules."ALL-CLAS0004"]
+policy = { kind = "numeric", maximum = 8 }
+
 # Four directories sit one module above the ceiling, and each one the rule's own
 # Exceptions section argues against splitting. `src/atpx/counsel` holds the two
 # counsel agents, the boss mechanic the refuter drives, and the one probe

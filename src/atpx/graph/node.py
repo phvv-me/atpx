@@ -45,7 +45,7 @@ class Node:
     """
 
     FILENAME: ClassVar[str] = "node.md"
-    EVIDENCE_HEADING: ClassVar[str] = "## Evidence"
+    EVIDENCE_HEADINGS: ClassVar[tuple[str, ...]] = ("## Evidence", "## Ledger")
 
     def __init__(self, path: Path) -> None:
         """path: the `node.md` file inside a blueprint directory."""
@@ -105,7 +105,13 @@ class Node:
         """The literal frontmatter status string, None when the node carries none."""
         return self.frontmatter.get("status") or None
 
-    RELATIONS: ClassVar[tuple[str, ...]] = ("successor_of", "refutes", "shadows", "lemma_for")
+    RELATIONS: ClassVar[tuple[str, ...]] = (
+        "successor_of",
+        "refutes",
+        "shadows",
+        "lemma_for",
+        "superseded_by",
+    )
 
     @property
     def relations(self) -> dict[str, list[str]]:
@@ -115,7 +121,7 @@ class Node:
         computable: `successor_of` points at the node this one grew from,
         `refutes` at what its counterexample killed, `shadows` at nodes whose
         certificates its findings weaken, `lemma_for` at the nodes that lean
-        on it.
+        on it, and `superseded_by` at the node of record a stub now points to.
         """
         found = {}
         for kind in self.RELATIONS:
@@ -124,6 +130,11 @@ class Node:
             if slugs:
                 found[kind] = slugs
         return found
+
+    @property
+    def root(self) -> str:
+        """The blueprints root this node was found under, its directory's parent's name."""
+        return self.path.parent.parent.name
 
     @property
     def stated(self) -> bool:
@@ -154,6 +165,20 @@ class Node:
         return self.frontmatter.get("summary", "")
 
     @property
+    def superseded(self) -> bool:
+        """Whether this node is a pointer whose claim of record lives somewhere else."""
+        return bool(self.superseded_by)
+
+    @property
+    def superseded_by(self) -> str:
+        """Where the node of record moved to, empty for a node that is still its own record.
+
+        The pointer is a slug or a `<root>/<slug>` path, since a migration that
+        moves a claim between blueprint roots leaves the stub behind naming both.
+        """
+        return self.frontmatter.get("superseded_by", "")
+
+    @property
     def tags(self) -> set[str]:
         """Every #tag in the node body."""
         return set(_TAG.findall(self.text))
@@ -164,21 +189,24 @@ class Node:
         return self.path.read_text()
 
     def append_evidence(self, line: str) -> None:
-        """Append one bullet at the end of the `## Evidence` section, and nowhere else.
+        """Append one bullet at the end of the evidence section, and nowhere else.
 
-        Evidence is append-only below the statement, so a node without an
-        `## Evidence` section is refused rather than restructured: nothing this
-        method writes can ever touch a line above the evidence heading.
+        `## Evidence` and `## Ledger` are two spellings of one section, so a node
+        that calls its readings a ledger is written to exactly like one that calls
+        them evidence. Evidence is append-only below the statement, so a node with
+        neither heading is refused rather than restructured: nothing this method
+        writes can ever touch a line above it.
 
         line: the already formatted `- [tag date] text` bullet.
         """
         lines = self.text.splitlines()
         start = next(
-            (i for i, text in enumerate(lines) if text.startswith(self.EVIDENCE_HEADING)), None
+            (i for i, text in enumerate(lines) if text.startswith(self.EVIDENCE_HEADINGS)), None
         )
         if start is None:
+            headings = " or ".join(repr(heading) for heading in self.EVIDENCE_HEADINGS)
             raise ValueError(
-                f"{self.name} has no {self.EVIDENCE_HEADING!r} section; "
+                f"{self.name} has no {headings} section; "
                 "add one below the statement before noting evidence"
             )
         self.path.write_text("\n".join(self.__inserted(lines, start, line)) + "\n")

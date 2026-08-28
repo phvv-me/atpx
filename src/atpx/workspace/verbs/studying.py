@@ -40,7 +40,7 @@ class StudyVerbs(FoundationState):
         lines = [
             line for line in note.read_text().splitlines() if not line.startswith("blueprint:")
         ]
-        target = self.blueprints / slug / Node.FILENAME
+        target = self.nodes.directory(slug) / Node.FILENAME
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("\n".join(lines) + "\n")
         return str(target.relative_to(self.root))
@@ -48,9 +48,9 @@ class StudyVerbs(FoundationState):
     def brief(self, slug: Slug) -> str:
         """The full agent context bundle for one blueprint node, as markdown.
 
-        slug: the blueprint directory name under the blueprints root.
+        slug: the blueprint directory name under any declared blueprints root.
         """
-        blueprint = Blueprint.load(self.blueprints / slug)
+        blueprint = Blueprint.load(self.nodes.directory(slug))
         node = self.nodes.find(slug)
         return Briefing(blueprint, node, self.nodes, git_revision(self.root)).render()
 
@@ -84,14 +84,14 @@ class StudyVerbs(FoundationState):
         cannot interleave a half-newer index.
         """
         with self.ledger_index.guard:
-            return self.ledger_index.write(self.nodes.nodes())
+            return self.ledger_index.write(self.nodes.canonical())
 
     def judge_brief(self, slug: Slug) -> str:
         """What changed since the node's last judgment snapshot, as markdown.
 
         slug: the blueprint directory name under the blueprints root.
         """
-        blueprint = Blueprint.load(self.blueprints / slug)
+        blueprint = Blueprint.load(self.nodes.directory(slug))
         node = self.nodes.find(slug)
         return JudgeBriefing(blueprint, node).render()
 
@@ -115,10 +115,12 @@ class StudyVerbs(FoundationState):
     def note(self, slug: Slug, text: str, *, tag: TagName = "note") -> str:
         """Append one dated evidence bullet to a node, `- [tag date] text`, append-only.
 
-        The bullet lands at the end of the `## Evidence` section, stamped with
-        today's UTC date. Nothing above that heading is ever touched: a node
-        without an `## Evidence` section is refused rather than restructured,
-        statement and frontmatter included.
+        The bullet lands at the end of the `## Evidence` section, or the `## Ledger`
+        section a node may call it instead, stamped with today's UTC date. Nothing
+        above that heading is ever touched: a node with neither section is refused
+        rather than restructured, statement and frontmatter included. A superseded
+        node is refused too, naming the node of record its pointer gives, since
+        evidence belongs on the claim as it stands rather than on the stub it left.
 
         slug: the blueprint directory name holding the node.
         text: the one-line evidence bullet body.
@@ -129,6 +131,11 @@ class StudyVerbs(FoundationState):
         if "".join(text.splitlines()) != text:
             raise ValueError("an evidence bullet must stay on one line")
         node = self.nodes.find(slug)
+        if node.superseded:
+            raise ValueError(
+                f"{slug} was superseded by {node.superseded_by}; "
+                f"note this on {node.superseded_by}, which is the node of record"
+            )
         line = f"- [{tag} {today()}] {text}"
         node.append_evidence(line)
         return line
