@@ -78,8 +78,13 @@ class StudyVerbs(FoundationState):
         note with its generated table, and the blueprint-shaped graph JSON
         beside it. Hand-authored prose survives under the manual section, moved
         there whole the first time the generator meets a hand-written index.
+
+        The node set is read inside the index lock, so the regeneration is
+        atomic with respect to the state it read and a concurrent session
+        cannot interleave a half-newer index.
         """
-        return self.ledger_index.write(self.nodes.nodes())
+        with self.ledger_index.guard:
+            return self.ledger_index.write(self.nodes.nodes())
 
     def judge_brief(self, slug: Slug) -> str:
         """What changed since the node's last judgment snapshot, as markdown.

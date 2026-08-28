@@ -54,8 +54,26 @@ blueprints/voronoi-e8-codec/
 ├── atpx.toml             # [claims] table: name → command
 ├── probes/               # the claim scripts
 └── evidence/
-    └── <hostname>.json   # this host's append-only certificate ledger
+    ├── <hostname>.ndjson # this host's append-only certificate ledger, one per line
+    └── outputs/          # any claim output too large for a certificate, whole
 ```
+
+The ledger is NDJSON and a write only ever appends one line, so a killed
+process, a full disk, or one torn record costs exactly the record it was
+writing and every certificate around it still reads. A record that cannot be
+decoded is skipped with a `TornLedger` warning naming its file and line,
+never raised, so one bad line can never hide a host's whole ledger from
+`newest`, from a settle gate, or from `doctor`. A ledger written in the
+pre-stream format, one whole-file JSON array at `<hostname>.json`, still
+reads exactly as recorded: the two formats fold into one chronological
+reading of the host and nothing rewrites history in place.
+
+A claim output too large for a certificate is written whole to
+`evidence/outputs/<digest>.txt` and the certificate keeps whole lines from
+each end around a marker naming that file, beside an `elided` record carrying
+the character count, the digest, and the path. So a stored output is either
+the entire text or an explicit pointer to it, and a reader parsing
+`result.output` never meets a JSON document cut through the middle.
 
 A **claim** is one entry in `atpx.toml` — a bare command string, or a table
 with `command` and an optional `requires` (`requires = "cuda"` skips the

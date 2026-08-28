@@ -1,10 +1,15 @@
 import json
 from collections.abc import Sequence
+from functools import cached_property
 from pathlib import Path
 from typing import ClassVar
 
+from filelock import FileLock
+
 from ..graph.category import Category
 from ..graph.node import Node
+
+_LOCK_TIMEOUT = 10.0
 
 
 class LedgerIndex:
@@ -15,6 +20,12 @@ class LedgerIndex:
     would change either file. Hand-authored prose is never deleted; the first
     generation over a hand-written index moves its whole body under the manual
     section, which every later regeneration preserves verbatim.
+
+    The pair is written and read under the same file lock the evidence store
+    beside it already takes. Two sessions regenerating at once, or one reading
+    the currency check while the other writes, would otherwise see one artifact
+    from each regeneration and report an index that is only cosmetically behind
+    as a workspace breakage.
     """
 
     MARK: ClassVar[str] = (
@@ -31,6 +42,19 @@ class LedgerIndex:
     def graph_path(self) -> Path:
         """The graph JSON artifact, beside the index note."""
         return self.path.with_suffix(".json")
+
+    @cached_property
+    def guard(self) -> FileLock:
+        """The lock both the regeneration and the currency check take, held over both artifacts.
+
+        One lock object per index, so a caller widening the lock around its own read
+        of the node set nests inside the regeneration's own acquisition instead of
+        waiting on itself. Ensures the index directory on the way, since the lock
+        file lives beside the artifacts and a workspace whose index has never been
+        generated has nowhere to put it yet.
+        """
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        return FileLock(f"{self.path}.lock", timeout=_LOCK_TIMEOUT)
 
     def claim(self, node: Node) -> str:
         """One node's one-line claim, its `summary` or its statement heading."""
@@ -66,16 +90,22 @@ class LedgerIndex:
         return json.dumps(self.graph(nodes), indent=2) + "\n"
 
     def stale(self, nodes: Sequence[Node]) -> list[Path]:
-        """The artifacts a regeneration would change, empty when the index is current."""
-        expected = {
-            self.path: self.render(nodes),
-            self.graph_path: self.rendered_graph(nodes),
-        }
-        return [
-            path
-            for path, text in expected.items()
-            if not path.exists() or path.read_text() != text
-        ]
+        """The artifacts a regeneration would change, empty when the index is current.
+
+        Read under the write lock, so a concurrent regeneration is never caught
+        halfway and a workspace is never called broken over a race it would have
+        won a moment later.
+        """
+        with self.guard:
+            expected = {
+                self.path: self.render(nodes),
+                self.graph_path: self.rendered_graph(nodes),
+            }
+            return [
+                path
+                for path, text in expected.items()
+                if not path.exists() or path.read_text() != text
+            ]
 
     def state(self, node: Node) -> str:
         """One node's index state: its raw status, or its kind for a statusless special node."""
@@ -112,15 +142,19 @@ class LedgerIndex:
         return "\n".join(["| Node | State | Claim |", "| --- | --- | --- |", *rows])
 
     def write(self, nodes: Sequence[Node]) -> str:
-        """Write both artifacts, returning the index markdown.
+        """Write both artifacts under the lock, returning the index markdown.
+
+        The pair moves together or not at all, and the render is deterministic given
+        a node set, so a second writer under the same lock writes identical bytes
+        rather than a mixture of two regenerations.
 
         nodes: every blueprint node the store tracks.
         """
-        text = self.render(nodes)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(text)
-        self.graph_path.write_text(self.rendered_graph(nodes))
-        return text
+        with self.guard:
+            text = self.render(nodes)
+            self.path.write_text(text)
+            self.graph_path.write_text(self.rendered_graph(nodes))
+            return text
 
     @staticmethod
     def __cell(text: str) -> str:

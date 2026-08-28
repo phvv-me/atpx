@@ -24,8 +24,9 @@ filesystem state.
 2. **CLI.** `atpx <verb>` exposes the same methods through cyclopts, which owns the
    event loop and runs the async verbs to completion.
 3. **Filesystem.** Blueprint directories hold per-host append-only evidence ledgers
-   at `evidence/<hostname>.json`, and each blueprint's `node.md` carries the node's
-   statement, status, and journal. The directory name is the node's name.
+   at `evidence/<hostname>.ndjson`, one certificate per line, and each blueprint's
+   `node.md` carries the node's statement, status, and journal. The directory name
+   is the node's name.
 
 The posture is capture first, tolerate the mess, gate on evidence. `run` wraps
 any command with zero ceremony, the readers never crash on malformed state,

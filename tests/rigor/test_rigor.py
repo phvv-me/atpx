@@ -116,10 +116,11 @@ def test_rigor_round_trips_through_the_ledger(tmp_path: Path) -> None:
 
 
 def test_a_ledger_predating_rigor_reads_as_sampled(tmp_path: Path) -> None:
+    """The pre-migration array format, read exactly as it was recorded."""
     store = EvidenceStore(tmp_path)
     record = stamped().model_dump()
     del record["rigor"]
-    store.path.parent.mkdir(parents=True)
-    store.path.write_text(json.dumps([record]))
+    store.array.parent.mkdir(parents=True)
+    store.array.write_text(json.dumps([record]))
     (entry,) = store.read()
     assert entry.rigor == "sampled"

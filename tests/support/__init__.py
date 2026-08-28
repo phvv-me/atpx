@@ -34,6 +34,9 @@ from .node_text import (
 from .planted import (
     planted as planted,
 )
+from .raced import (
+    raced as raced,
+)
 from .reply import (
     reply as reply,
 )

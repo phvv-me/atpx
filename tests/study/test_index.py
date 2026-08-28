@@ -1,6 +1,6 @@
 import json
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from hypothesis import given
@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 from atpx import Node, NodeStore, Status
 from atpx.study import LedgerIndex
 
-from ..support import node_text
+from ..support import node_text, raced
 
 nodes_strategy = st.dictionaries(
     keys=st.from_regex(r"node-[a-z]{1,8}", fullmatch=True),
@@ -100,6 +100,29 @@ def test_stale_lists_both_artifacts_until_written_then_nothing(root: Path) -> No
     assert index.stale(store.nodes()) == []
     store.find("demo").set_status(Status.ABANDONED)
     assert index.stale(store.nodes()) == [index.path, index.graph_path]
+
+
+def regenerating(path: Path, nodes: Sequence[Node]) -> Callable[[], None]:
+    """One competing session's job: regenerate this index repeatedly from its own writer."""
+    writer = LedgerIndex(path)
+
+    def regenerate() -> None:
+        for _ in range(20):
+            writer.write(nodes)
+
+    return regenerate
+
+
+def test_racing_regenerations_never_leave_a_mixed_pair(root: Path) -> None:
+    """Both artifacts move under one lock, so no session can leave one from each generation."""
+    store = NodeStore(root / "research" / "math")
+    path = store.path / "INDEX.md"
+    every = store.nodes()
+    raced(regenerating(path, every), regenerating(path, every[:1]))
+    rows = [line for line in path.read_text().splitlines() if line.startswith("| [[")]
+    tabled = {line.split("[[")[1].split("]]")[0] for line in rows}
+    graph = json.loads(path.with_suffix(".json").read_text())
+    assert tabled == {str(row["slug"]) for row in graph["nodes"]}
 
 
 def test_a_missing_index_generates_from_scratch_without_a_manual_section(tmp_path: Path) -> None:

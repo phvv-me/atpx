@@ -6,7 +6,7 @@ from pathlib import Path
 from ..blueprint.manifest import Blueprint
 from ..core.certificate import Certificate
 from ..support.naming import Naming
-from .payload import payload
+from .payload import Capture
 from .runners.seam import CommandRunner
 
 _RERUN_LIMIT = 4
@@ -45,7 +45,7 @@ class Running:
         exit_status, output = await self.bounded(blueprint.command(claim), timeout)
         return Certificate.stamp(
             claim=f"{blueprint.slug}/{claim}",
-            result=payload(output),
+            result=Capture(blueprint.directory).payload(output),
             engine=Naming.NAME,
             engine_version=package_version(Naming.NAME),
             exit_status=exit_status,

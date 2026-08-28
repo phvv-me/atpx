@@ -1,6 +1,8 @@
 import asyncio
 import json
+import tempfile
 from collections.abc import Callable
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -8,35 +10,43 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from atpx import Blueprint, EvidenceStore, Workspace
-from atpx.running import ProcessRunner, Running, clipped, payload, stale_claims
+from atpx.running import Capture, ProcessRunner, Running, clipped, stale_claims
 from atpx.support import drive
 
 from ..support import FakeRunner, SleepyRunner, stamped
 
 
-def test_payload_takes_the_last_json_line() -> None:
+@pytest.fixture
+def capture(tmp_path: Path) -> Capture:
+    """A capture externalizing oversized output under a throwaway blueprint directory."""
+    return Capture(tmp_path)
+
+
+def test_payload_takes_the_last_json_line(capture: Capture) -> None:
     output = 'noise\n{"broken": \n{"margin": 0.25}\ntrailing prose'
-    assert payload(output) == {"margin": 0.25}
-    assert payload("no json at all") == {"output": "no json at all"}
+    assert capture.payload(output) == {"margin": 0.25}
+    assert capture.payload("no json at all") == {"output": "no json at all"}
 
 
-def test_payload_falls_back_when_the_only_json_line_is_broken() -> None:
-    assert payload('{"broken":') == {"output": '{"broken":'}
+def test_payload_falls_back_when_the_only_json_line_is_broken(capture: Capture) -> None:
+    assert capture.payload('{"broken":') == {"output": '{"broken":'}
 
 
-def test_payload_reads_indented_json() -> None:
-    assert payload('prose\n   {"a": 1}') == {"a": 1}
+def test_payload_reads_indented_json(capture: Capture) -> None:
+    assert capture.payload('prose\n   {"a": 1}') == {"a": 1}
 
 
-def test_payload_takes_the_last_value_of_an_interleaved_line() -> None:
-    assert payload('{"a": 1}{"b": 2}') == {"b": 2}
-    assert payload('{"a": 1} {"b": 2}') == {"b": 2}
-    assert payload('[1, 2] {"b": 2}\tnot json trailer') == {"b": 2}
+def test_payload_takes_the_last_value_of_an_interleaved_line(capture: Capture) -> None:
+    assert capture.payload('{"a": 1}{"b": 2}') == {"b": 2}
+    assert capture.payload('{"a": 1} {"b": 2}') == {"b": 2}
+    assert capture.payload('[1, 2] {"b": 2}\tnot json trailer') == {"b": 2}
 
 
 @given(st.dictionaries(st.text(), st.integers(), max_size=3), st.text())
 def test_payload_recovers_the_last_printed_object(result: dict[str, int], noise: str) -> None:
-    assert payload(noise + "\n" + json.dumps(result) + "\n") == result
+    with tempfile.TemporaryDirectory() as directory:
+        line = json.dumps(result)
+        assert Capture(Path(directory)).payload(f"{noise}\n{line}\n") == result
 
 
 @given(st.text(min_size=0, max_size=200))
@@ -44,24 +54,51 @@ def test_clipped_keeps_short_text_verbatim(text: str) -> None:
     assert clipped(text, limit=200) == text
 
 
-@given(st.integers(min_value=10, max_value=100))
-def test_clipped_keeps_both_ends_around_the_elision_marker(limit: int) -> None:
-    head, tail = "H" * limit, "T" * limit
-    text = head + "M" * (3 * limit) + tail
-    kept = clipped(text, limit=limit)
-    assert kept.startswith("H" * (limit // 2))
-    assert kept.endswith("T" * (limit // 2))
-    assert f"[{len(text) - limit} characters elided]" in kept
+@given(st.integers(min_value=4, max_value=60))
+def test_clipped_keeps_only_whole_lines_from_both_ends(count: int) -> None:
+    """The elision boundary is a line break, so a kept line is never half a line."""
+    lines = [f"case={index} measured={index}.5 target={index}.4" for index in range(count)]
+    text = "\n".join(lines)
+    kept = clipped(text, limit=len(text) // 2)
+    body = kept.splitlines()
+    assert body[0] == lines[0] and body[-1] == lines[-1]
+    assert [line for line in body if line not in lines] == [
+        line for line in body if line.startswith("... [")
+    ]
 
 
-def test_payload_fallback_keeps_the_head_of_long_output() -> None:
-    long_output = "first case line\n" + ("x" * 20_000) + "\nlast case line"
-    fallback = payload(long_output)
-    assert isinstance(fallback, dict)
-    kept = fallback["output"]
-    assert isinstance(kept, str)
-    assert kept.startswith("first case line")
-    assert kept.endswith("last case line")
+def test_clipped_drops_a_single_oversized_line_whole() -> None:
+    """One long line has no safe cut inside it, so the marker stands alone."""
+    assert clipped("x" * 500, limit=100) == "... [500 characters elided] ..."
+
+
+def test_oversized_output_is_written_whole_beside_the_ledger(capture: Capture) -> None:
+    text = "\n".join(f"case={index} measured=1.0" for index in range(2_000))
+    recorded = capture.recorded(text)
+    elided = recorded["elided"]
+    assert isinstance(elided, dict)
+    assert elided["characters"] == len(text)
+    assert elided["digest"] == f"sha256:{sha256(text.encode()).hexdigest()}"
+    assert (capture.directory / str(elided["path"])).read_text() == text
+    assert str(elided["path"]) in str(recorded["output"])
+
+
+def test_an_oversized_json_document_is_externalized_rather_than_cut(capture: Capture) -> None:
+    """The defect on disk: a JSON blob too long to store, elided into a middle nothing reads.
+
+    It is now written out whole and what the certificate keeps holds only whole
+    lines of it, so nothing ever reads back a JSON document cut through the middle.
+    """
+    cases = [{"case": index, "measured": index * 1.5} for index in range(2_000)]
+    document = json.dumps({"cases": cases}, indent=2)
+    result = capture.payload(document)
+    assert isinstance(result, dict)
+    elided = result["elided"]
+    assert isinstance(elided, dict)
+    assert (capture.directory / str(elided["path"])).read_text() == document
+    lines = document.splitlines()
+    kept = [line for line in str(result["output"]).splitlines() if not line.startswith("... [")]
+    assert all(line in lines for line in kept)
 
 
 def test_bounded_stamps_exit_124_on_expiry(tmp_path: Path) -> None:

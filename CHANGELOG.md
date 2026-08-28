@@ -4,6 +4,36 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
+## Unreleased
+
+### Changed
+
+- The evidence ledger is append-only NDJSON at `evidence/<hostname>.ndjson`,
+  one certificate per line, written by opening the file for append and never
+  by rewriting it. A killed process, a full disk, or one torn record now costs
+  exactly the record it was writing. A record that does not decode is skipped
+  with a `TornLedger` warning naming its file and line rather than raised, so
+  one bad record can no longer make a whole host's ledger read as absent to
+  `newest`, to a settle gate, or to `doctor`. The pre-stream format, one
+  whole-file JSON array at `evidence/<hostname>.json`, is read transparently
+  beside the stream and never rewritten, so history stays byte for byte what
+  was recorded. Records split on the newline alone, never on `str.splitlines`,
+  which also breaks at NEL and the paragraph separators that JSON does not
+  escape and that would otherwise tear a certificate in half.
+- A claim output too large for a certificate is now written whole to
+  `evidence/outputs/<digest>.txt` and the certificate keeps whole lines from
+  each end around a marker naming that file, beside an `elided` record with
+  the character count, the digest, and the path. Elision lands only on a line
+  boundary, so a stored output is either the entire text or an explicit
+  pointer to it and never a JSON document cut through the middle. `Capture`
+  replaces the `payload` function and covers the ordinary run, the rigor
+  lanes, and the Lean audit alike.
+- `atpx index` writes and `doctor` reads the INDEX pair under the same file
+  lock the evidence store beside them already took, so two sessions
+  regenerating at once, or one checking currency while the other writes, can
+  no longer leave one artifact from each generation and turn a cosmetic race
+  into a red workspace.
+
 ## 0.0.4 - 2026-08-25
 
 ### Added

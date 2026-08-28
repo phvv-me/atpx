@@ -19,7 +19,7 @@ class LeanVerbs(FoundationState):
         """
         blueprint = self.register(slug, claim="lean")
         certificate = await LeanAudit(self.running, self.lean_task).certified(
-            slug, target, timeout
+            blueprint, target, timeout
         )
         EvidenceStore(blueprint.directory).append(certificate)
         return certificate

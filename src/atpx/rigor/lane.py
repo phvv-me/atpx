@@ -5,7 +5,7 @@ from pydantic import JsonValue
 from ..blueprint.manifest import Blueprint
 from ..core.certificate import Certificate
 from ..running.execution import Running
-from ..running.payload import clipped
+from ..running.payload import Capture
 from ..support.naming import Naming
 from .audits import Audit, witnesses
 
@@ -46,7 +46,7 @@ class RigorLane:
         result: JsonValue = {
             "witnesses": list[JsonValue](witnesses(output, key=self.audit.key)),
             "violation": violation,
-            "output": clipped(output.strip()),
+            **Capture(blueprint.directory).recorded(output.strip()),
         }
         return Certificate.stamp(
             claim=f"{blueprint.slug}/{claim}",
