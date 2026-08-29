@@ -4,7 +4,7 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
-## Unreleased
+## 0.0.6 - 2026-08-29
 
 ### Added
 
