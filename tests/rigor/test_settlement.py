@@ -22,6 +22,21 @@ def test_free_statuses_have_no_gate_and_need_no_evidence(space: Workspace) -> No
     assert space.nodes.find("demo").status is Status.KNOWN
 
 
+def test_undecided_is_a_free_word_that_settles_the_node_all_the_same(space: Workspace) -> None:
+    """The fifth settled word: no artifact witnesses a comparison that separated nothing.
+
+    It has to end the node, or a program whose trial ran clean and read inconclusive
+    would have to spend `abandoned` or `known` on it, and both say something the run
+    never showed.
+    """
+    assert Gate.of(Status.UNDECIDED) is None
+    space.settle("demo", "undecided", "the registered comparison separates nothing.")
+    assert space.nodes.find("demo").status is Status.UNDECIDED
+    assert Status.UNDECIDED.is_settled
+    assert space.status()["undecided"] == ["demo"]
+    assert "demo" not in [entry["node"] for entry in space.graph()]
+
+
 def test_settle_moves_a_free_status_and_journals_it(space: Workspace) -> None:
     line = space.settle("demo", "in_progress", "picking this up.")
     assert line.startswith("- [settle/in_progress ")

@@ -317,6 +317,7 @@ this ladder:
 | `validated` | `--certificate <claim>`, a persisted certificate with rigor `ball`, `smt`, or `exact` and exit 0 |
 | `refuted` | `--counterexample <claim>`, a persisted counterexample certificate |
 | `verified` | `--lean <claim>`, a clean Lean build certificate |
+| `undecided` | free, the verdict of a clean run whose registered comparison could not separate the outcomes |
 | `abandoned`, `known` | free, `known` marking a literature collision, true but already in the record |
 
 ```sh

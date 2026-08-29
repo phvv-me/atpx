@@ -86,8 +86,8 @@ in ahead of time.
 
 A node's `status` only moves behind an evidence gate, and each gate checks
 only the evidence offered — never which status the node happened to hold
-before. `open`, `in_progress`, `abandoned`, and `known` are free; the rest
-each demand one artifact already sitting in the blueprint:
+before. `open`, `in_progress`, `undecided`, `abandoned`, and `known` are
+free; the rest each demand one artifact already sitting in the blueprint:
 
 ```mermaid
 flowchart LR
@@ -103,6 +103,14 @@ clean. `refuted` demands a persisted counterexample certificate. `verified`
 demands a Lean certificate with zero sorries and no risky axioms flagged
 (`sorryAx`, `native_decide`, and similar). `known` marks a literature
 collision — true, but already in the record.
+
+Three of the free words settle a node all the same. `undecided` is the
+verdict of a clean run whose registered comparison could not separate the
+outcomes: the experiment is done and the answer is inside the noise, which is
+a result and not a failure to produce one. `abandoned` drops the line of
+attack while the question stands. `known` sends the reader to the record. A
+vocabulary without the first of these has to spend `abandoned` or `known` on
+an inconclusive trial, and both of them say something the run never showed.
 
 Each gate is a small, independently registered class that only inspects the
 evidence named in the settle call, so a node can jump straight to `verified`

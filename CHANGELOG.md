@@ -8,6 +8,20 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ### Added
 
+- `undecided` is the fifth settled word on the lifecycle ladder: the verdict of
+  a run that finished clean and whose registered comparison could not separate
+  the outcomes. It settles a node like the rest of the settled statuses, so it
+  leaves the frontier, tallies under its own key in `atpx status`, and can be
+  declared in `[vocabulary]`; and it is free of any evidence gate, since no
+  artifact witnesses a separation that did not happen. Without it a program
+  reading an inconclusive trial has to spend `abandoned`, which says the attack
+  was dropped, or `known`, which says the record already holds the answer, and
+  both claim something the run never showed.
+
+## 0.0.5 - 2026-08-29
+
+### Added
+
 - `[workspace] blueprints` accepts a list of roots, `["math", "experiments"]`,
   read as one graph rather than as two workspaces, which is what a program
   needs once its claims of record move between trees. A bare string still

@@ -26,7 +26,9 @@ class SettleVerbs(FoundationState):
         certificate in the node's ledgers, `validated` a persisted certificate
         whose rigor is ball, smt, or exact with exit 0, `verified` a clean
         Lean certificate with zero sorries and no flagged risky axioms. The
-        free statuses (open, in_progress, abandoned, known) need none.
+        free statuses (open, in_progress, undecided, abandoned, known) need
+        none: no artifact can witness that a comparison failed to separate,
+        that an attack was dropped, or that somebody else got there first.
 
         A workspace that declares a `[vocabulary]` table narrows the ladder to
         the settled words it names, and a target outside it is refused here
