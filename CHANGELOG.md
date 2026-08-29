@@ -18,6 +18,14 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   was dropped, or `known`, which says the record already holds the answer, and
   both claim something the run never showed.
 
+### Fixed
+
+- `atpx index` refuses to write a regeneration that found no nodes at all over
+  an index that carries rows, naming the blueprint roots it searched. 0.0.4 read
+  a list-valued `blueprints` setting back as the text of a list, matched no
+  directory, and rewrote a 63-row index with an empty table; the roots are wrong
+  in that state rather than the workspace being empty, and nothing is written.
+
 ## 0.0.5 - 2026-08-29
 
 ### Added

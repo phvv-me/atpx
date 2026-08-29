@@ -3,11 +3,12 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from atpx import Node, NodeStore, Status
-from atpx.study import LedgerIndex
+from atpx.study import BlankIndexError, LedgerIndex
 
 from ..support import node_text, raced
 
@@ -158,3 +159,34 @@ def test_a_claim_with_a_pipe_cannot_break_the_table(tmp_path: Path) -> None:
     table = LedgerIndex(tmp_path / "INDEX.md").table([Node(note)])
     (row,) = [line for line in table.splitlines() if "piped" in line]
     assert row == "| [[piped]] | open | a \\| b |"
+
+
+def test_a_regeneration_that_found_no_nodes_refuses_to_blank_the_index(root: Path) -> None:
+    """The field failure: a blueprints root that matched nothing emptied a populated index.
+
+    Zero nodes over an index that carries rows is a root that does not exist, never a
+    workspace that lost every claim, so the roots searched are what the refusal names.
+    """
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md", store.path)
+    generated = index.write(store.nodes())
+    with pytest.raises(BlankIndexError) as refusal:
+        index.write([])
+    assert str(store.path) in str(refusal.value)
+    assert index.path.read_text() == generated
+
+
+def test_a_refusal_says_so_when_the_index_was_handed_no_roots_at_all(root: Path) -> None:
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md")
+    index.write(store.nodes())
+    with pytest.raises(BlankIndexError, match="none declared"):
+        index.write([])
+
+
+def test_an_index_with_no_rows_to_lose_still_generates_from_an_empty_workspace(
+    tmp_path: Path,
+) -> None:
+    """Nothing to drop is nothing to refuse: the guard reads rows, not emptiness."""
+    index = LedgerIndex(tmp_path / "INDEX.md")
+    assert "| Node | State | Claim |" in index.write([])

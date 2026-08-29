@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from atpx import Status, Workspace
+from atpx.study import BlankIndexError
 
 from ..support import node_text
 
@@ -69,6 +70,23 @@ def test_index_writes_the_table_and_the_graph_beside_it(space: Workspace) -> Non
     assert text == space.ledger_index.path.read_text()
     assert space.ledger_index.graph_path == space.nodes.path / "INDEX.json"
     assert '"slug": "dep"' in space.ledger_index.graph_path.read_text()
+
+
+def test_index_refuses_to_blank_a_generated_index_when_no_declared_root_exists(
+    root: Path,
+) -> None:
+    """The whole path, since the roots the refusal names are the facade's to hand over.
+
+    A blueprints setting that resolves to a directory nobody has read the store as an
+    empty graph, and the regeneration that follows would replace every row with nothing.
+    """
+    declared = '[workspace]\nindex = "research/math/INDEX.md"\n'
+    (root / "atpx.toml").write_text(declared)
+    generated = Workspace(root).index()
+    (root / "atpx.toml").write_text(f'{declared}blueprints = "research/nowhere"\n')
+    with pytest.raises(BlankIndexError, match="research/nowhere"):
+        Workspace(root).index()
+    assert (root / "research" / "math" / "INDEX.md").read_text() == generated
 
 
 def test_index_moves_the_hand_written_body_under_the_manual_section(space: Workspace) -> None:

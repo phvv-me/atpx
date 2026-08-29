@@ -8,6 +8,7 @@ from filelock import FileLock
 
 from ..graph.category import Category
 from ..graph.node import Node
+from .exceptions import BlankIndexError
 
 _LOCK_TIMEOUT = 10.0
 
@@ -26,6 +27,10 @@ class LedgerIndex:
     the currency check while the other writes, would otherwise see one artifact
     from each regeneration and report an index that is only cosmetically behind
     as a workspace breakage.
+
+    A regeneration that finds no nodes at all is refused rather than written,
+    since a workspace whose index carries rows never legitimately empties in one
+    step, and the empty read is a misconfigured blueprints root every time.
     """
 
     MARK: ClassVar[str] = (
@@ -34,9 +39,14 @@ class LedgerIndex:
     )
     MANUAL: ClassVar[str] = "## Manual    (hand-authored, preserved verbatim)"
 
-    def __init__(self, path: Path) -> None:
-        """path: the index markdown file the workspace manifest declares."""
+    def __init__(self, path: Path, *roots: Path) -> None:
+        """path: the index markdown file the workspace manifest declares.
+
+        roots: the blueprint roots the nodes were read from, named when a
+            regeneration finds none of them and the refusal has to say where it looked.
+        """
         self.path = path
+        self.roots = roots
 
     @property
     def graph_path(self) -> Path:
@@ -161,6 +171,7 @@ class LedgerIndex:
         nodes: every blueprint node the store tracks.
         """
         with self.guard:
+            self.__refuse_blanking(nodes)
             text = self.render(nodes)
             self.path.write_text(text)
             self.graph_path.write_text(self.rendered_graph(nodes))
@@ -170,3 +181,31 @@ class LedgerIndex:
     def __cell(text: str) -> str:
         """One table cell's text, pipes escaped so a claim can never break the row."""
         return text.replace("|", "\\|")
+
+    def __carried(self) -> list[str]:
+        """The generated node rows the index on disk already holds, none when it has none."""
+        if not self.path.exists():
+            return []
+        return [line for line in self.path.read_text().splitlines() if line.startswith("| [[")]
+
+    def __refuse_blanking(self, nodes: Sequence[Node]) -> None:
+        """Refuse a regeneration that found nothing over an index that carries rows.
+
+        What this catches, from the field: a `blueprints` setting read back as the text
+        of a list matched no directory, the store answered with an empty graph, and the
+        regeneration replaced a 63-row index with an empty table under a lock that made
+        it look deliberate. A populated workspace never empties in one step, so an empty
+        read is a root that does not exist, and the roots are what the message has to
+        name because the setting behind them is the thing to fix.
+
+        nodes: the node set this regeneration would write.
+        """
+        if nodes or not (carried := self.__carried()):
+            return
+        roots = ", ".join(str(root) for root in self.roots) or "none declared"
+        raise BlankIndexError(
+            f"regenerating {self.path} found no nodes while the index on disk carries "
+            f"{len(carried)}, so the blueprint roots searched are wrong rather than "
+            f"empty and nothing was written. Roots searched: {roots}. Check that "
+            "[workspace] blueprints names directories that exist."
+        )

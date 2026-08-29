@@ -103,11 +103,13 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         """The generated index artifacts, the markdown note and the graph JSON beside it.
 
         The manifest's `index` setting names the note root-relative; an
-        undeclared index lives beside the nodes as `INDEX.md`.
+        undeclared index lives beside the nodes as `INDEX.md`. It carries the
+        declared roots, which is what a regeneration that found no nodes at all
+        names when it refuses to blank an index that carries rows.
         """
         configured = self.config.get("index")
         path = self.root / str(configured) if configured else self.nodes.path / "INDEX.md"
-        return LedgerIndex(path)
+        return LedgerIndex(path, *self.blueprints)
 
     @cached_property
     def manifest(self) -> Mapping[str, Mapping[str, JsonValue]]:
