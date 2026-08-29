@@ -4,13 +4,10 @@ from functools import cached_property
 from pathlib import Path
 from typing import ClassVar
 
-from filelock import FileLock
-
+from ..core.locking import Guard
 from ..graph.category import Category
 from ..graph.node import Node
 from .exceptions import BlankIndexError
-
-_LOCK_TIMEOUT = 10.0
 
 
 class LedgerIndex:
@@ -54,7 +51,7 @@ class LedgerIndex:
         return self.path.with_suffix(".json")
 
     @cached_property
-    def guard(self) -> FileLock:
+    def guard(self) -> Guard:
         """The lock both the regeneration and the currency check take, held over both artifacts.
 
         One lock object per index, so a caller widening the lock around its own read
@@ -64,7 +61,7 @@ class LedgerIndex:
         generated has nowhere to put it yet.
         """
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        return FileLock(f"{self.path}.lock", timeout=_LOCK_TIMEOUT)
+        return Guard(self.path)
 
     def claim(self, node: Node) -> str:
         """One node's one-line claim, its `summary` or its statement heading."""

@@ -190,3 +190,13 @@ def test_an_index_with_no_rows_to_lose_still_generates_from_an_empty_workspace(
     """Nothing to drop is nothing to refuse: the guard reads rows, not emptiness."""
     index = LedgerIndex(tmp_path / "INDEX.md")
     assert "| Node | State | Claim |" in index.write([])
+
+
+def test_a_leftover_lock_neither_blocks_the_next_run_nor_survives_it(root: Path) -> None:
+    """What a killed session leaves: a lock file the kernel already dropped the lock behind."""
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md")
+    leftover = Path(f"{index.path}.lock")
+    leftover.write_text("")
+    index.write(store.nodes())
+    assert not leftover.exists()

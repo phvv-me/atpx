@@ -69,7 +69,7 @@ wheels = [
 
 [[package]]
 name = "atpx"
-version = "0.0.4"
+version = "0.0.5"
 source = { editable = "." }
 dependencies = [
     { name = "cyclopts" },
@@ -109,7 +109,7 @@ requires-dist = [
     { name = "cyclopts", specifier = ">=4" },
     { name = "dirty-equals", marker = "extra == 'dev'", specifier = ">=0.8" },
     { name = "faker", marker = "extra == 'dev'", specifier = ">=30" },
-    { name = "filelock", specifier = ">=3.20" },
+    { name = "filelock", specifier = ">=3.32" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },

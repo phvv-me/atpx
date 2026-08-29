@@ -37,7 +37,10 @@ dependencies = [
   "python-flint>=0.8",
   "httpx>=0.28",
   "tomlkit>=0.13",
-  "filelock>=3.20",
+  # 3.32 is the floor `core.locking` needs: the sweep unlinks the lock pathname while
+  # holding it, and only a filelock that drops a lock won on an already-unlinked inode
+  # and retries keeps two writers from ending up inside the section at once.
+  "filelock>=3.32",
   # Capped below 3: the 3.x client builds its transport on `httpx2`, a different
   # distribution from the `httpx` respx patches, so every consultation test silently
   # reaches the live API instead of the mock and the counsel lane loses its coverage.

@@ -25,6 +25,14 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   a list-valued `blueprints` setting back as the text of a list, matched no
   directory, and rewrote a 63-row index with an empty table; the roots are wrong
   in that state rather than the workspace being empty, and nothing is written.
+- A ledger's lock file no longer outlives its last holder. The index and the
+  evidence stream take the same `Guard`, which removes the `.lock` pathname as
+  the last holder lets go and sweeps away a leftover from a killed session on
+  the next run that takes the lock, so a workspace stops accumulating zero-byte
+  `INDEX.md.lock` files nobody can tell from live ones. The lock itself lives on
+  the inode and the kernel drops it when its process dies, so such a leftover
+  never blocked anything; `filelock>=3.32` is now the floor, since the sweep
+  needs a lock that drops one won on an already-unlinked inode and retries.
 
 ## 0.0.5 - 2026-08-29
 

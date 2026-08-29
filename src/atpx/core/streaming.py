@@ -3,12 +3,10 @@ import warnings
 from functools import cached_property
 from pathlib import Path
 
-from filelock import FileLock
 from pydantic import JsonValue
 
+from .locking import Guard
 from .tearing import TornLedger
-
-_LOCK_TIMEOUT = 10.0
 
 
 class Stream:
@@ -32,9 +30,9 @@ class Stream:
         self.path = path
 
     @cached_property
-    def guard(self) -> FileLock:
+    def guard(self) -> Guard:
         """The lock an append takes, so a caller can widen it around its own read first."""
-        return FileLock(f"{self.path}.lock", timeout=_LOCK_TIMEOUT)
+        return Guard(self.path)
 
     @property
     def records(self) -> list[tuple[str, JsonValue]]:
