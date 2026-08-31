@@ -8,10 +8,12 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ### Fixed
 
-- A node whose front matter spells its name as `null` no longer mints a slug
-  from the text `None` and lands under it in the index; the slug comes from the
-  folder when the spelling is missing, and a spelling that is present but null
-  is refused with the file named.
+- The relation fields of a node's front matter (`successor_of`, `refutes`,
+  `shadows`, `lemma_for`, `superseded_by`, `depends`, `serves`) read `null`,
+  `~`, `none`, `None` and the empty string as no value instead of minting a
+  slug from the spelling, which used to become a phantom edge in the graph; and
+  `atpx doctor` names any entry that is still not a plausible slug (a space, a
+  colon, or one of those spellings).
 
 ## 0.0.6 - 2026-08-29
 
