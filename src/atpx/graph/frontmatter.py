@@ -1,8 +1,13 @@
+import re
+from typing import ClassVar
+
 from patos import FrozenModel
 
 from .category import Category
 
 _MISSING = "no frontmatter block"
+_NULL_FAMILY = {"null", "~", "none"}
+_IMPLAUSIBLE = re.compile(r"[\s:]")
 
 
 def fields(text: str) -> dict[str, str] | None:
@@ -27,6 +32,29 @@ def fields(text: str) -> dict[str, str] | None:
     return found
 
 
+def split_slugs(raw: str) -> tuple[list[str], list[str]]:
+    """One field's raw comma list split into its real slugs and its implausible items.
+
+    A null-family spelling (`null`, `~`, `none`/`None`) or an empty item names no
+    slug and is silently absent, the same as the key being missing outright.
+    Anything else that cannot be a real slug either (whitespace, a colon inside
+    it) is absent too, but named in the second list, so `successor_of: null`
+    reads as no predecessor rather than minting the literal word as a graph
+    edge, while a value that is broken some other way still gets named for
+    `doctor` to report.
+
+    raw: the field's raw text after the key.
+    """
+    found = []
+    implausible = []
+    for item in Frontmatter.listed(raw):
+        if item.lower() in _NULL_FAMILY or _IMPLAUSIBLE.search(item):
+            implausible.append(item)
+        else:
+            found.append(item)
+    return found, implausible
+
+
 class Frontmatter(FrozenModel):
     """The typed node.md frontmatter contract, read tolerantly for backfill.
 
@@ -47,6 +75,14 @@ class Frontmatter(FrozenModel):
     judgments: list[str] = []
     superseded_by: str = ""
     problems: list[str] = []
+
+    RELATIONS: ClassVar[tuple[str, ...]] = (
+        "successor_of",
+        "refutes",
+        "shadows",
+        "lemma_for",
+        "superseded_by",
+    )
 
     @property
     def category(self) -> Category:
@@ -75,6 +111,11 @@ class Frontmatter(FrozenModel):
     def parse(cls, text: str) -> Frontmatter:
         """Read one node file's frontmatter into the contract, collecting problems.
 
+        Every slug-valued key, `depends`, `serves`, `superseded_by`, and the four
+        edge keys `Node.relations` reads, is screened by `split_slugs`: a null
+        spelling never mints a graph edge, and anything else unslug-like is named
+        in `problems` instead.
+
         text: the full node file content.
         """
         raw = fields(text)
@@ -83,17 +124,30 @@ class Frontmatter(FrozenModel):
         problems = []
         seeds = []
         for item in cls.listed(raw.get("seeds", "")):
+            if item.lower() in _NULL_FAMILY:
+                continue
             try:
                 seeds.append(int(item))
             except ValueError:
                 problems.append(f"seeds entry {item!r} is not an integer")
+        depends, bad = split_slugs(raw.get("depends", ""))
+        problems += [f"depends entry {item!r} is not a plausible slug" for item in bad]
+        serves, bad = split_slugs(raw.get("serves", ""))
+        problems += [f"serves entry {item!r} is not a plausible slug" for item in bad]
+        superseded, bad = split_slugs(raw.get("superseded_by", ""))
+        problems += [f"superseded_by entry {item!r} is not a plausible slug" for item in bad]
+        for key in cls.RELATIONS:
+            if key == "superseded_by":
+                continue
+            _, bad = split_slugs(raw.get(key, ""))
+            problems += [f"{key} entry {item!r} is not a plausible slug" for item in bad]
         return cls(
             status=raw.get("status") or None,
             kind=raw.get("kind") or None,
-            depends=cls.listed(raw.get("depends", "")),
-            serves=cls.listed(raw.get("serves", "")),
+            depends=depends,
+            serves=serves,
             seeds=seeds,
             judgments=cls.listed(raw.get("judgments", "")),
-            superseded_by=raw.get("superseded_by", ""),
+            superseded_by=superseded[0] if superseded else "",
             problems=problems,
         )

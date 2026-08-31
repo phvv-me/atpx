@@ -112,6 +112,49 @@ def test_relations_are_empty_without_typed_keys() -> None:
     assert written(node_text()).relations == {}
 
 
+def test_relations_never_mint_a_null_spelling_as_an_edge() -> None:
+    """A stray `successor_of: null` reads as no predecessor, not a slug named 'null'."""
+    text = """---
+status: open
+date: 2026-08-15
+successor_of: null
+shadows: width-law, none
+---
+
+# N
+"""
+    node = written(text)
+    assert node.relations == {"shadows": ["width-law"]}
+
+
+def test_relations_drop_an_implausible_value() -> None:
+    text = """---
+status: open
+date: 2026-08-15
+lemma_for: real-node, not a slug
+---
+
+# N
+"""
+    node = written(text)
+    assert node.relations == {"lemma_for": ["real-node"]}
+
+
+def test_superseded_by_treats_a_null_spelling_as_no_pointer() -> None:
+    node = written(node_text(front={"superseded_by": "~"}))
+    assert node.superseded_by == "" and not node.superseded
+
+
+def test_superseded_by_treats_an_implausible_value_as_no_pointer() -> None:
+    node = written(node_text(front={"superseded_by": "not a slug"}))
+    assert node.superseded_by == "" and not node.superseded
+
+
+def test_superseded_by_still_reads_a_real_pointer() -> None:
+    node = written(node_text(front={"superseded_by": "moved-node"}))
+    assert node.superseded_by == "moved-node" and node.superseded
+
+
 def test_the_statement_of_record_is_the_statement_section() -> None:
     node = written(node_text(body="The claim.") + "\n## Proof\n\nargument\n")
     assert node.headline == "Demo Node"

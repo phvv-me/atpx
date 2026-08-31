@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import ClassVar
 
-from .frontmatter import Frontmatter, fields
+from .frontmatter import Frontmatter, fields, split_slugs
 from .journal import LogEntry
 from .status import Status
 
@@ -105,13 +105,7 @@ class Node:
         """The literal frontmatter status string, None when the node carries none."""
         return self.frontmatter.get("status") or None
 
-    RELATIONS: ClassVar[tuple[str, ...]] = (
-        "successor_of",
-        "refutes",
-        "shadows",
-        "lemma_for",
-        "superseded_by",
-    )
+    RELATIONS: ClassVar[tuple[str, ...]] = Frontmatter.RELATIONS
 
     @property
     def relations(self) -> dict[str, list[str]]:
@@ -122,11 +116,12 @@ class Node:
         `refutes` at what its counterexample killed, `shadows` at nodes whose
         certificates its findings weaken, `lemma_for` at the nodes that lean
         on it, and `superseded_by` at the node of record a stub now points to.
+        A null spelling or an implausible value never joins the slugs `split_slugs`
+        returns, so it can never mint a phantom edge; `doctor` reports it instead.
         """
         found = {}
         for kind in self.RELATIONS:
-            raw = self.frontmatter.get(kind, "")
-            slugs = [part.strip() for part in raw.split(",") if part.strip()]
+            slugs, _ = split_slugs(self.frontmatter.get(kind, ""))
             if slugs:
                 found[kind] = slugs
         return found
@@ -175,8 +170,11 @@ class Node:
 
         The pointer is a slug or a `<root>/<slug>` path, since a migration that
         moves a claim between blueprint roots leaves the stub behind naming both.
+        A null spelling or an implausible value reads as no pointer at all, the
+        same as the key being absent.
         """
-        return self.frontmatter.get("superseded_by", "")
+        slugs, _ = split_slugs(self.frontmatter.get("superseded_by", ""))
+        return slugs[0] if slugs else ""
 
     @property
     def tags(self) -> set[str]:

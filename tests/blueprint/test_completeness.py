@@ -54,6 +54,19 @@ def test_doctor_reports_frontmatter_that_does_not_parse(root: Path) -> None:
     }
 
 
+def test_doctor_reports_a_null_spelling_instead_of_minting_an_edge(root: Path) -> None:
+    """`successor_of: null` is the bug this contract exists to catch: never a real edge."""
+    seeded = root / _MATH / "demo" / "node.md"
+    seeded.write_text(
+        seeded.read_text().replace("---\nstatus:", "---\nsuccessor_of: null\nstatus:")
+    )
+    report = reported(Workspace(root, runner=FakeRunner()))
+    assert report["frontmatter_problems"] == {
+        "demo": ["successor_of entry 'null' is not a plausible slug"]
+    }
+    assert report["dangling_links"] == {}
+
+
 def test_doctor_demands_a_linked_judgment_on_every_sketch(root: Path) -> None:
     node = root / _MATH / "dep" / "node.md"
     node.write_text(node.read_text().replace("judgments: [judgments/draft.md]\n", ""))
