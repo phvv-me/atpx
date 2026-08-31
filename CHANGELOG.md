@@ -4,6 +4,15 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
+## 0.0.7 - 2026-08-31
+
+### Fixed
+
+- A node whose front matter spells its name as `null` no longer mints a slug
+  from the text `None` and lands under it in the index; the slug comes from the
+  folder when the spelling is missing, and a spelling that is present but null
+  is refused with the file named.
+
 ## 0.0.6 - 2026-08-29
 
 ### Added
