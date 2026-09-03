@@ -37,9 +37,9 @@ dependencies = [
   "python-flint>=0.8",
   "httpx>=0.28",
   "tomlkit>=0.13",
-  # 3.32 is the floor `core.locking` needs: the sweep unlinks the lock pathname while
-  # holding it, and only a filelock that drops a lock won on an already-unlinked inode
-  # and retries keeps two writers from ending up inside the section at once.
+  # 3.32 is the floor `core.locking` needs: `preserve_lock_file` leaves pathname cleanup
+  # to its platform-aware sweep, while an acquisition won on an already-unlinked inode
+  # is dropped and retried so two writers never enter the section at once.
   "filelock>=3.32",
   # Capped below 3: the 3.x client builds its transport on `httpx2`, a different
   # distribution from the `httpx` respx patches, so every consultation test silently

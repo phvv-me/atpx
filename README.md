@@ -375,6 +375,10 @@ as asyncio subprocesses, and `verify` re-runs claims with at most four in
 flight. The purely local or CPU-bound verbs (`status`, `graph`, `brief`,
 `doctor`, `settle`, `fit`, ...) stay plain sync.
 
+File-backed writes are serialized by native locks. Their adjacent `.lock` paths are
+cleanup markers rather than ownership records: ATPX sweeps them after use, including
+the release-before-delete path Windows requires for an open lock handle.
+
 The CLI never exposes any of this, cyclopts owns the event loop and runs sync
 and async verbs alike. In Python, async code awaits the verbs directly and
 can fan them out with `asyncio.gather`; synchronous scripts use the

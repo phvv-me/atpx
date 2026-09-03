@@ -68,6 +68,12 @@ pre-stream format, one whole-file JSON array at `<hostname>.json`, still
 reads exactly as recorded: the two formats fold into one chronological
 reading of the host and nothing rewrites history in place.
 
+Each append and paired index regeneration takes a native file lock. The adjacent
+`.lock` path is only the kernel lock's rendezvous file, not proof that a process is
+still running. ATPX sweeps it after use; on Windows, where an open lock handle cannot
+be deleted, ATPX releases its cleanup handle and retries. If a peer opens it first,
+that peer safely keeps the path and performs the next sweep when it leaves.
+
 A claim output too large for a certificate is written whole to
 `evidence/outputs/<digest>.txt` and the certificate keeps whole lines from
 each end around a marker naming that file, beside an `elided` record carrying

@@ -4,6 +4,15 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
+## Unreleased
+
+### Fixed
+
+- Ledger lock cleanup now follows Windows file-sharing semantics: when the OS refuses to
+  unlink the lock while its cleanup handle is open, ATPX releases that handle and retries.
+  A peer that opens the file first keeps it for its own later sweep instead of turning a
+  successful command into `WinError 32`.
+
 ## 0.0.7 - 2026-08-31
 
 ### Fixed
