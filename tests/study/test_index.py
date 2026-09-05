@@ -200,3 +200,19 @@ def test_a_leftover_lock_neither_blocks_the_next_run_nor_survives_it(root: Path)
     leftover.write_text("")
     index.write(store.nodes())
     assert not leftover.exists()
+
+
+def test_the_index_lists_each_node_document_with_its_own_state(tmp_path: Path) -> None:
+    """One campaign directory, two registrations, two rows, so a refutation cannot hide."""
+    store = NodeStore(tmp_path / "math")
+    directory = store.path / "campaign"
+    directory.mkdir(parents=True)
+    (directory / "node.md").write_text(
+        node_text("validated", title="Campaign", summary="the v1 campaign")
+    )
+    (directory / "v2-node.md").write_text(
+        node_text("refuted", title="Campaign v2", summary="the v2 successor")
+    )
+    text = LedgerIndex(store.path / "INDEX.md").render(store.nodes())
+    assert "| [[campaign]] | validated | the v1 campaign |" in text
+    assert "| [[campaign/v2]] | refuted | the v2 successor |" in text

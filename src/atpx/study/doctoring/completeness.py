@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -34,12 +35,32 @@ class CompletenessLints:
         """This group's report slice, one key per lint."""
         return {
             "invalid_statuses": self.invalid_statuses(),
+            "contradicted_results": self.contradicted_results(),
             "dangling_links": self.dangling(),
+            "unjoined_twins": self.unjoined_twins(),
             "frontmatter_problems": self.frontmatter_problems(),
             "unstated_nodes": self.unstated(),
             "unconditioned_nodes": self.unconditioned(),
             "unjudged_sketches": self.unjudged_sketches(),
             "drifted_statements": self.drifted(),
+        }
+
+    def contradicted_results(self) -> dict[str, JsonValue]:
+        """Nodes whose frontmatter status disagrees with the verdict their result note declares.
+
+        Two places record how a campaign came out and only one of them is read by the
+        index, the frontier and every count. When they disagree the ledger reports the
+        node as owed while its own write-up has settled it, which is how a validated
+        campaign sat in the graph as `registered` for a day and a refutation sat behind
+        a `registered` sibling. Neither side is authoritative here: the lint names the
+        pair and the owner moves the status or amends the note.
+        """
+        return {
+            node.name: f"node says {node.raw_status or 'nothing'}, {path.name} says {declared}"
+            for node in self.nodes.nodes()
+            if (declared := node.result.declared)
+            and (path := node.result.path) is not None
+            and declared != (node.raw_status or "")
         }
 
     def dangling(self) -> dict[str, JsonValue]:
@@ -49,6 +70,7 @@ class CompletenessLints:
         `superseded_by` points at nothing is exactly the dangling pointer this lint
         exists to catch.
         """
+        reachable = self.nodes.reach()
         report: dict[str, JsonValue] = {}
         for node in self.nodes.nodes():
             targets = dict.fromkeys(
@@ -58,7 +80,7 @@ class CompletenessLints:
                     *node.front.depends,
                 ]
             )
-            missing = [slug for slug in targets if not self.nodes.holds(slug)]
+            missing = [slug for slug in targets if slug not in reachable]
             if missing:
                 report[node.name] = list[JsonValue](missing)
         return report
@@ -106,6 +128,27 @@ class CompletenessLints:
             if node.front.category is not Category.PROBE_POOL and not node.conditioned
         ]
 
+    def unjoined_twins(self) -> dict[str, JsonValue]:
+        """Node names that differ only in their separators with nothing joining the pair.
+
+        `atpx` does not fold a hyphen into an underscore, so `x-structure` and
+        `x_structure` are two names and `[[x-structure]]` lands on exactly one of them.
+        That is fine when the pair says which is which, a stub pointing at the universe
+        it moved to or a model naming the measurement it grew from, and a trap when it
+        does not: a reader following a link, and a results table citing one of them,
+        both end up at whichever half nobody is maintaining. Any typed relation joins
+        the pair, so this fires only on twins that were never related at all.
+        """
+        twins: dict[str, list[Node]] = {}
+        for node in self.nodes.nodes():
+            twins.setdefault(node.name.replace("-", "_"), []).append(node)
+        return {
+            ", ".join(node.name for node in pair): "two names for one separator, "
+            "with no relation joining them; point one at the other or rename it"
+            for pair in twins.values()
+            if len(pair) > 1 and not self.__joined(pair)
+        }
+
     def unjudged_sketches(self) -> dict[str, JsonValue]:
         """Sketched nodes whose counsel standing is absent, missing, or names no rung.
 
@@ -137,6 +180,24 @@ class CompletenessLints:
             for node in self.nodes.canonical()
             if node.front.category is not Category.PROBE_POOL and not node.stated
         ]
+
+    @staticmethod
+    def __joined(pair: Sequence[Node]) -> bool:
+        """Whether some node of a same-name group names another of them in a typed relation.
+
+        A relation names a bare slug or a `<root>/<slug>` pointer, and both join the pair,
+        since a migration between blueprint roots is exactly when the qualified spelling
+        gets written.
+
+        pair: the nodes whose names collide once separators are read as one.
+        """
+        names = {node.name for node in pair}
+        return any(
+            slug.rpartition("/")[2] in names - {node.name}
+            for node in pair
+            for slugs in node.relations.values()
+            for slug in slugs
+        )
 
     def __ruled(self, node: Node, pointer: str) -> str:
         """What is wrong with one linked judgment, empty when it exists and names a rung.

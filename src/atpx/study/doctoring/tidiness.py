@@ -83,12 +83,15 @@ class TidinessLints:
         """Nodes holding certificates with no pre-registration design file beside them.
 
         Untidiness rather than a breakage: the discipline wants `design` before the
-        run, but evidence captured before the contract existed stays evidence.
+        run, but evidence captured before the contract existed stays evidence. The
+        design files belong to the directory, so its node of record answers for them
+        and a second node document beside it is not asked twice.
         """
         return [
             node.name
             for node in self.nodes.canonical()
-            if node.front.category is not Category.PROBE_POOL
+            if node.primary
+            and node.front.category is not Category.PROBE_POOL
             and any(EvidenceStore.ledgers(node.directory).values())
             and not any(node.directory.glob("design-*.md"))
         ]

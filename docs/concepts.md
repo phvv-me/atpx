@@ -51,12 +51,25 @@ named after the node. It holds:
 ```text
 blueprints/voronoi-e8-codec/
 ├── node.md              # statement, status, journal
+├── result.md            # the settled write-up, declaring `Status: <verdict>`
 ├── atpx.toml             # [claims] table: name → command
 ├── probes/               # the claim scripts
 └── evidence/
     ├── <hostname>.ndjson # this host's append-only certificate ledger, one per line
     └── outputs/          # any claim output too large for a certificate, whole
 ```
+
+`node.md` is the directory's node of record and takes the directory's name. A
+campaign that re-registers a successor beside the run it grew from writes a
+second node document, `<name>-node.md`, and that is a node in its own right,
+named `<directory>/<name>`, with its own status, its own index row and its own
+`<name>-result.md`. Reading only `node.md` would count several registrations as
+one and let a refutation hide behind the status its neighbour still carries.
+
+A result note declares how the campaign came out on one line, `Status: validated`
+or `Verdict: refuted`, bold or plain. `doctor` fails when that word and the node's
+frontmatter status disagree, so a settled campaign cannot sit in the graph as
+still owed. Prose that merely mentions a ladder word declares nothing.
 
 The ledger is NDJSON and a write only ever appends one line, so a killed
 process, a full disk, or one torn record costs exactly the record it was

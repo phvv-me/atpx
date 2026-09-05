@@ -16,9 +16,12 @@ class NodeStore:
     declaration order, so a slug that two roots both hold resolves to the first, and
     the first root is where a fresh blueprint lands.
 
-    Membership is existence: every blueprint directory holding a `node.md` is a node,
+    Membership is existence: every node document under a blueprint directory is a node,
     no tag gating, so an untagged node can never silently vanish from a fleet view. A
     malformed or absent status lands in the `invalid` bucket `doctor` reports instead.
+    A directory holding several registrations answers with several nodes, one per
+    document, since counting them as one is how a refutation hides behind the
+    `registered` its directory's `node.md` still carries.
 
     A node carrying `superseded_by` is an ALIAS rather than a second claim: it names
     where its node of record moved and it is folded out of `canonical`, which is what
@@ -89,31 +92,44 @@ class NodeStore:
             ready.append(self.__row(node, dependencies))
         return ready
 
-    def holds(self, pointer: str) -> bool:
-        """Whether some root holds the blueprint a slug or `<root>/<slug>` pointer names.
-
-        pointer: a bare slug, or one qualified by the name of the root holding it.
-        """
-        return self.resolve(pointer) is not None
-
     def nodes(self) -> list[Node]:
-        """Every blueprint node across the roots, sorted by slug, the first root winning."""
+        """Every node document across the roots, sorted by slug, the first root winning."""
         found: dict[str, Node] = {}
         for root in self.roots:
-            for path in sorted(root.glob(f"*/{Node.FILENAME}")):
-                found.setdefault(path.parent.name, Node(path))
+            for pattern in (f"*/{Node.FILENAME}", f"*/*{Node.SUFFIX}"):
+                for path in sorted(root.glob(pattern)):
+                    found.setdefault(Node(path).name, Node(path))
         return [found[name] for name in sorted(found)]
+
+    def reach(self) -> set[str]:
+        """Every pointer this store answers: blueprint names, root-qualified names, node names.
+
+        Read whole rather than one pointer at a time, because the caller is the dangling
+        lint asking about every wikilink in the workspace at once and resolving each one
+        on its own would reopen every node file per link.
+        """
+        found = {node.name for node in self.nodes()}
+        for root in self.roots:
+            found |= {
+                f"{qualifier}{directory.name}"
+                for directory in (sorted(root.iterdir()) if root.is_dir() else ())
+                if directory.is_dir()
+                for qualifier in ("", f"{root.name}/")
+            }
+        return found
 
     def resolve(self, pointer: str) -> Path | None:
         """The blueprint directory a pointer names, None when no root holds it.
 
-        pointer: a bare slug, or one qualified by the name of the root holding it.
+        pointer: a bare slug, one qualified by the name of the root holding it, or the
+            `<blueprint>/<document>` name of a second node document, which resolves to
+            the blueprint directory it shares with its directory's node of record.
         """
         named, _, slug = pointer.rpartition("/")
         for root in self.roots:
             if (not named or root.name == named) and (root / slug).is_dir():
                 return root / slug
-        return None
+        return next((node.directory for node in self.nodes() if node.name == pointer), None)
 
     def resolved(self) -> dict[str, Node]:
         """Every node keyed by each slug that reaches it, an alias keyed to its canonical.

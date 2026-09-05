@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from .frontmatter import Frontmatter, fields, split_slugs
 from .journal import LogEntry
+from .result import ResultDocument
 from .status import Status
 
 _WIKILINK = re.compile(r"\[\[([^\]|#]+)")
@@ -37,18 +38,28 @@ def statement_of(text: str) -> str:
 
 
 class Node:
-    """One proof node backed by `node.md` inside its blueprint directory.
+    """One proof node backed by a node document inside its blueprint directory.
 
     The blueprint directory is the unit of mathematical state: statement,
     status, and journal live in `node.md` next to the runnable evidence, and
     the node's name is the directory name, the slug wikilinks reference.
+
+    A directory may hold MORE THAN ONE node document, and the ledger has to read
+    every one of them. A campaign that re-registers a successor beside the run it
+    grew from writes `<name>-node.md` next to `node.md`, each with its own status
+    and its own registration seal, and a reader that only ever opened `node.md`
+    counted three registrations as one and hid a refutation behind a `registered`.
+    So the document is the node, not the directory: `node.md` is the directory's
+    node of record and takes the directory's name, and `<name>-node.md` is a second
+    node named `<directory>/<name>`, which is the slug a wikilink to it uses.
     """
 
     FILENAME: ClassVar[str] = "node.md"
+    SUFFIX: ClassVar[str] = f"-{FILENAME}"
     EVIDENCE_HEADINGS: ClassVar[tuple[str, ...]] = ("## Evidence", "## Ledger")
 
     def __init__(self, path: Path) -> None:
-        """path: the `node.md` file inside a blueprint directory."""
+        """path: a node document, `node.md` or `<name>-node.md`, inside a blueprint directory."""
         self.path = path
 
     @property
@@ -97,8 +108,25 @@ class Node:
 
     @property
     def name(self) -> str:
-        """The node's identity, its blueprint directory name, which wikilinks reference."""
-        return self.path.parent.name
+        """The node's identity, the slug wikilinks reference.
+
+        The blueprint directory's name for its node of record, and that name followed by
+        the document's own for a second node document in the same directory, so two
+        registrations sharing one campaign's evidence are still two names in the graph.
+        """
+        if self.primary:
+            return self.path.parent.name
+        return f"{self.path.parent.name}/{self.path.name.removesuffix(self.SUFFIX)}"
+
+    @property
+    def primary(self) -> bool:
+        """Whether this is its directory's node of record, the `node.md` beside the evidence.
+
+        The manifest, the design files and the evidence ledgers belong to the directory
+        and therefore to this node, so a lint that reads any of them reads it once here
+        rather than once per node document sharing the directory.
+        """
+        return self.path.name == self.FILENAME
 
     @property
     def raw_status(self) -> str | None:
@@ -125,6 +153,11 @@ class Node:
             if slugs:
                 found[kind] = slugs
         return found
+
+    @property
+    def result(self) -> ResultDocument:
+        """The result note settling this node document, whether or not one exists yet."""
+        return ResultDocument(self.path)
 
     @property
     def root(self) -> str:

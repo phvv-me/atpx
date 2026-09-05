@@ -21,6 +21,7 @@ from ...running.runners.process import ProcessRunner
 from ...running.runners.seam import CommandRunner
 from ...study.doctoring import DoctorReport
 from ...study.index import LedgerIndex
+from ...study.results import ResultsLedger
 from ...support.naming import Naming
 from ..access import SyncVerbs, find_root, find_roots
 from ..foundation import Slug
@@ -122,6 +123,16 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         return NodeStore(*self.blueprints)
 
     @cached_property
+    def results_ledger(self) -> ResultsLedger:
+        """The hand-authored results table the settled nodes owe a row to.
+
+        It sits beside the generated index, since the two are read together and a
+        program that keeps one keeps the other in the same directory. A workspace with
+        no such file reports nothing about it rather than being told to write one.
+        """
+        return ResultsLedger(self.ledger_index.path.parent / ResultsLedger.NAME)
+
+    @cached_property
     def root(self) -> Path:
         """The workspace root, discovered from `given`, `ATPX_ROOT`, or the cwd on first use."""
         return find_root(self.given)
@@ -168,7 +179,8 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         the node statement it supports, frontmatter that does not parse, a node without a
         statement of record or a refutation condition, a sketched node whose linked
         judgment is missing or names no attacking rung, a statement that drifted from its
-        judgment snapshot, or an index a regeneration would change. Untidiness that
+        judgment snapshot, a settled node the results table beside the index carries no row
+        for, or an index a regeneration would change. Untidiness that
         capture-first work is allowed to leave behind, stray data files under `evidence/`,
         a blueprint with no manifest or no node yet, or certificates with no design file,
         reports without failing the gate.
@@ -177,7 +189,12 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         broken: list[JsonValue] = []
         for root in find_roots(self.root):
             space = self if root == self.root else Workspace(root)
-            report = DoctorReport(space.nodes, root=root, index=space.ledger_index).compiled()
+            report = DoctorReport(
+                space.nodes,
+                root=root,
+                index=space.ledger_index,
+                results=space.results_ledger,
+            ).compiled()
             where = root.relative_to(self.root).as_posix()
             reports[where] = report
             broken += [f"{where}: {finding}" for finding in DoctorReport.breakages(report)]

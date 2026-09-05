@@ -45,7 +45,12 @@ def sketching(root: Path, *, judgments: str = "") -> Workspace:
 
 def unjudged(space: Workspace) -> dict[str, JsonValue]:
     """The `unjudged_sketches` slice of a fresh doctor report over one workspace."""
-    report = DoctorReport(space.nodes, root=space.root, index=space.ledger_index).compiled()
+    report = DoctorReport(
+        space.nodes,
+        root=space.root,
+        index=space.ledger_index,
+        results=space.results_ledger,
+    ).compiled()
     found = report["unjudged_sketches"]
     assert isinstance(found, dict)
     return found

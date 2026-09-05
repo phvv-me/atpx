@@ -168,3 +168,52 @@ def test_doctor_flags_evidence_older_than_the_statement_it_supports(root: Path) 
         )
     report = reported(Workspace(root, runner=FakeRunner()))["."]
     assert report["stale_claims"] == {"demo": ["gpu", "ok"]}
+
+
+def test_doctor_fails_when_a_node_and_its_result_note_disagree(root: Path) -> None:
+    """The exact drift that hid a settled campaign: the note settled it, the node never moved."""
+    directory = root / _MATH / "demo"
+    (directory / "node.md").write_text(node_text("in_progress", title="Demo"))
+    (directory / "result.md").write_text("# Demo result\n\nStatus: **validated** on 2026-09-04.\n")
+    certificate = Workspace(root, runner=FakeRunner()).doctor()
+    report = result_of(certificate)["workspaces"]["."]
+    assert report["contradicted_results"] == {
+        "demo": "node says in_progress, result.md says validated"
+    }
+    assert ".: contradicted_results" in result_of(certificate)["breakages"]
+
+
+def test_doctor_is_quiet_when_a_node_and_its_result_note_agree(root: Path) -> None:
+    directory = root / _MATH / "demo"
+    (directory / "node.md").write_text(node_text("validated", title="Demo"))
+    (directory / "result.md").write_text("Status: validated\n")
+    assert reported(Workspace(root, runner=FakeRunner()))["."]["contradicted_results"] == {}
+
+
+def test_doctor_reads_a_second_node_document_in_the_same_directory(root: Path) -> None:
+    """Two registrations in one campaign directory are two nodes carrying two states."""
+    successor = root / _MATH / "demo" / "v2-node.md"
+    successor.write_text(node_text("open", title="Demo v2").replace("open", "immaculate"))
+    report = reported(Workspace(root, runner=FakeRunner()))["."]
+    assert report["invalid_statuses"] == {"demo/v2": "immaculate"}
+
+
+def test_doctor_flags_two_names_for_one_claim_with_nothing_joining_them(root: Path) -> None:
+    planted(root / _MATH, "x-structure", text=node_text("open", title="X structure"))
+    planted(root / _MATH, "x_structure", text=node_text("open", title="X structure"))
+    report = reported(Workspace(root, runner=FakeRunner()))["."]
+    assert report["unjoined_twins"] == {
+        "x-structure, x_structure": "two names for one separator, with no relation joining "
+        "them; point one at the other or rename it"
+    }
+
+
+def test_a_relation_joins_a_pair_of_names_however_it_spells_the_pointer(root: Path) -> None:
+    """A migration between roots writes the qualified pointer, and that joins the pair too."""
+    planted(
+        root / _MATH,
+        "x-structure",
+        text=node_text("open", title="X structure", front={"superseded_by": "math/x_structure"}),
+    )
+    planted(root / _MATH, "x_structure", text=node_text("open", title="X structure"))
+    assert reported(Workspace(root, runner=FakeRunner()))["."]["unjoined_twins"] == {}

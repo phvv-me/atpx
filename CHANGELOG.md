@@ -6,6 +6,29 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 
 ## Unreleased
 
+### Added
+
+- A blueprint directory may hold more than one node document. `node.md` is the
+  directory's node of record and keeps the directory's name; a `<name>-node.md`
+  beside it is a second node named `<directory>/<name>`, with its own status, its
+  own index row and its own result note. A campaign that re-registers a successor
+  next to the run it grew from was previously read as one node, which counted three
+  registrations as one and hid a refutation behind the `registered` its `node.md`
+  still carried.
+- `doctor` fails on `contradicted_results`: a node whose frontmatter status disagrees
+  with the verdict its result note declares. A note settles its campaign on one line,
+  `Status: validated` or `Verdict: refuted`, bold or plain, and prose that merely
+  mentions a ladder word declares nothing.
+- `doctor` fails on `unreported_results`: a settled node the hand-authored `RESULTS.md`
+  beside the generated index carries no row for. A workspace with no such file is owed
+  no rows. `misdirected_citations` reports, without gating, a row citing a superseded
+  stub instead of the node of record its pointer names.
+- `doctor` fails on `unjoined_twins`: two node names that differ only in their
+  separators with no typed relation joining them, the shape that makes `[[x-structure]]`
+  and `[[x_structure]]` land on two different claims.
+- `NodeStore.reach` answers every pointer the store resolves, read once for a whole
+  graph of links; it replaces the per-pointer `NodeStore.holds`.
+
 ### Fixed
 
 - Ledger lock cleanup now follows Windows file-sharing semantics: when the OS refuses to

@@ -73,10 +73,12 @@ class ClaimLints:
         manifest and its ledgers are not reopened per lint. Superseded stubs are left out:
         their claims are frozen history certified where they were run, so holding them to
         the freshness of a statement that has moved would report a repair nobody can make.
+        A second node document in a directory is left out too, since the manifest and the
+        ledgers belong to the directory and its node of record already answers for them.
         """
         rows = []
         for node in self.nodes.canonical():
-            if not (node.directory / Naming.CONFIG).exists():
+            if not node.primary or not (node.directory / Naming.CONFIG).exists():
                 continue
             latest = EvidenceStore.newest(node.directory, node.name)
             claims = Blueprint.load(node.directory).claims

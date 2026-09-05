@@ -147,12 +147,14 @@ atpx doctor    # what needs repair — reported, never mutated
 `doctor` is the lint, and it returns a certificate rather than a bare
 report: its payload is keyed by workspace path (`.` for the resolved one),
 and it exits nonzero when a finding contradicts what a workspace itself
-asserts. Those breakages are an invalid status, a wikilink pointing at
-nothing, and a claim whose newest evidence failed, never ran, or was stamped
-before the last commit that changed the node it supports. Stray files under
-`evidence/`, a blueprint with no manifest, and a blueprint with no `node.md`
-report as untidiness and never fail the gate, since capture-first work is
-allowed to be messy.
+asserts. Those breakages are an invalid status, a status the node's own result
+note contradicts, a wikilink pointing at nothing, two names for one claim with
+no relation joining them, a settled node the `RESULTS.md` beside the generated
+index carries no row for, and a claim whose newest evidence failed, never ran,
+or was stamped before the last commit that changed the node it supports. Stray
+files under `evidence/`, a blueprint with no manifest, a blueprint with no
+`node.md`, and a results row citing a superseded stub report as untidiness and
+never fail the gate, since capture-first work is allowed to be messy.
 
 So `atpx doctor` from the top of a monorepo is the one command that answers
 whether every mathematical idea it holds is still settled, and its exit code
