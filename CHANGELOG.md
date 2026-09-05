@@ -26,6 +26,10 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
 - `doctor` fails on `unjoined_twins`: two node names that differ only in their
   separators with no typed relation joining them, the shape that makes `[[x-structure]]`
   and `[[x_structure]]` land on two different claims.
+- `compare` reads one node family's claim addresses across every device that ran them,
+  one row per `<node>/<claim>` address and one column per device, folded out of the
+  certificates already on disk. A blank cell is a coordinate that card still owes, and
+  the command exits nonzero only when two devices answered one address differently.
 - `NodeStore.reach` answers every pointer the store resolves, read once for a whole
   graph of links; it replaces the per-pointer `NodeStore.holds`.
 

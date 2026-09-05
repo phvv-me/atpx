@@ -1,5 +1,9 @@
 import re
+from importlib.metadata import version as package_version
 from pathlib import Path
+from typing import Annotated
+
+from cyclopts import Parameter
 
 from ...blueprint.manifest import Blueprint
 from ...briefing.brief import Briefing
@@ -8,12 +12,17 @@ from ...briefing.judgments.ruling import Ruling
 from ...briefing.judgments.rulings import RulingLedger
 from ...briefing.judgments.severity import Severity
 from ...core import git_revision
+from ...core.certificate import Certificate
 from ...graph.journal import LogEntry
 from ...graph.node import Node
+from ...study.crosscheck import DeviceComparison
 from ...study.designing import Design
 from ...support.clock import today
+from ...support.naming import Naming
 from ..foundation import Slug, TagName
 from ..state import FoundationState
+
+Family = Annotated[str, Parameter(help="the slug prefix selecting the nodes to compare")]
 
 _TAG = re.compile(r"^[\w.-]+$")
 
@@ -58,6 +67,28 @@ class StudyVerbs(FoundationState):
         blueprint = Blueprint.load(self.nodes.directory(slug))
         node = self.nodes.find(slug)
         return Briefing(blueprint, node, self.nodes, git_revision(self.root)).render()
+
+    def compare(self, family: Family = "") -> Certificate:
+        """One node family's claim addresses, verdict by verdict, across the devices that ran them.
+
+        The cross-device view a two-card program keeps asking for, folded out of the
+        certificates already on disk: one row per `<node>/<claim>` address, one column per
+        device, and a blank cell wherever a card has not run that address yet. Exits
+        nonzero when two devices answered one address differently, which is a portability
+        finding rather than a difference of opinion, and cleanly when they only differ in
+        how far each has got.
+
+        family: the slug prefix selecting the nodes to compare, every node when omitted.
+        """
+        comparison = DeviceComparison(self.nodes, family)
+        return Certificate.stamp(
+            claim=f"compare {family}" if family else "compare",
+            result=comparison.compiled(),
+            engine=Naming.NAME,
+            engine_version=package_version(Naming.NAME),
+            exit_status=1 if comparison.disagreements() else 0,
+            root=self.root,
+        )
 
     def design(self, slug: Slug) -> str:
         """Scaffold today's pre-registration file for one node, allocating its seed base.

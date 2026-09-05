@@ -30,6 +30,7 @@ them through the `ws.sync` facade (`ws.sync.run(...)`, `ws.sync.check(...)`,
 | `judge_brief(slug)` | sync | what changed since the last refuter judgment (markdown, read only) |
 | `status()` | sync | nodes grouped by status (plain dict, read only) |
 | `graph()` | sync | the dependency frontier (plain list, read only) |
+| `compare(family="")` | sync | one node family's claim addresses read across every device that ran them, nonzero when two devices disagree on one address |
 | `doctor()` | sync | what needs repair here and in every nested workspace, as one certificate that exits nonzero on a breakage |
 | `settle(slug, status, message="", judgment=None, counterexample=None, lean=None)` | sync | one evidence-gated status move, returning the journal line |
 | `lean(slug, target=None, timeout=3600)` | async | a Lean build ingested as an audited certificate |

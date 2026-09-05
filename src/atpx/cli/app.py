@@ -52,6 +52,7 @@ def build(space: Workspace) -> App:
         space.judge_brief,
         space.status,
         space.graph,
+        space.compare,
         space.doctor,
         space.settle,
         space.prove,
