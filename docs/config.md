@@ -47,7 +47,9 @@ ladder = [
 **A data contract.** atpx owns the lifecycle, so atpx owns the declaration.
 One sub-table per word, keyed by the word itself, which must be a settled
 status on the ladder (`sketched`, `validated`, `refuted`, `verified`,
-`undecided`, `abandoned`, `known`). Declaration order is report order.
+`undecided`, `abandoned`, `known`). Declaration order is report order. The
+unsettled words `open`, `proposed`, `registered` and `in_progress` are not
+declarable here, since a vocabulary states what a program settles ON.
 
 | Key | Type | Default | What it says |
 | --- | --- | --- | --- |

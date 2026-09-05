@@ -112,8 +112,9 @@ uses the host's normal `PATH` rules (including `PATHEXT` on Windows).
 
 A node's `status` only moves behind an evidence gate, and each gate checks
 only the evidence offered — never which status the node happened to hold
-before. `open`, `in_progress`, `undecided`, `abandoned`, and `known` are
-free; the rest each demand one artifact already sitting in the blueprint:
+before. `open`, `proposed`, `registered`, `in_progress`, `undecided`,
+`abandoned`, and `known` are free; the rest each demand one artifact already
+sitting in the blueprint:
 
 ```mermaid
 flowchart LR
@@ -130,7 +131,17 @@ demands a Lean certificate with zero sorries and no risky axioms flagged
 (`sorryAx`, `native_decide`, and similar). `known` marks a literature
 collision — true, but already in the record.
 
-Three of the free words settle a node all the same. `undecided` is the
+Three of the free words open a node rather than settle it, and they are the
+registration regime read as status. `open` is a question somebody wrote down.
+`proposed` is an idea with a shape, named and argued for with nothing frozen.
+`registered` is a specification committed BEFORE the runs it governs, its
+decision rule, its scope and its seal already in the record so they cannot be
+chosen once the numbers arrive, which is the whole difference between a
+confirmatory result and an exploratory one. A registered node has settled
+nothing: it stays on the frontier, it still owes its run, and the results table
+is owed no row for it.
+
+Three other free words settle a node all the same. `undecided` is the
 verdict of a clean run whose registered comparison could not separate the
 outcomes: the experiment is done and the answer is inside the noise, which is
 a result and not a failure to produce one. `abandoned` drops the line of

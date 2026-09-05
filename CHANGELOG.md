@@ -4,7 +4,7 @@ All notable changes to atpx are documented here.
 
 The format follows Keep a Changelog, and releases are cut from the version in `pyproject.toml`.
 
-## Unreleased
+## 0.0.8 - 2026-09-05
 
 ### Added
 
@@ -32,6 +32,13 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   the command exits nonzero only when two devices answered one address differently.
 - `NodeStore.reach` answers every pointer the store resolves, read once for a whole
   graph of links; it replaces the per-pointer `NodeStore.holds`.
+- `proposed` and `registered` join the lifecycle ladder as UNSETTLED states between
+  `open` and `in_progress`, the registration regime read as status: `proposed` is an
+  idea with a shape and nothing frozen, `registered` is a specification committed
+  before the runs it governs. Both are free of any settle gate, both keep a node on
+  the frontier, and neither is declarable in `[vocabulary]` or owed a `RESULTS.md`
+  row, since a promise about a run that has not happened is not a finding. Workspaces
+  already writing these words had nine nodes reported as `invalid_statuses`.
 
 ### Fixed
 
