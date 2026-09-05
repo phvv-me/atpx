@@ -12,6 +12,14 @@ The format follows Keep a Changelog, and releases are cut from the version in `p
   unlink the lock while its cleanup handle is open, ATPX releases that handle and retries.
   A peer that opens the file first keeps it for its own later sweep instead of turning a
   successful command into `WinError 32`.
+- A ledger append after a killed writer now separates that writer's partial tail before
+  recording the next certificate, so one torn record cannot consume its successor.
+- Cancelling a claim now kills the launcher's complete process tree and drains its pipes,
+  preventing orphaned Windows workers and event-loop finalizer warnings.
+- Workspace text is read and written as UTF-8 on every host, and paths stored in
+  certificates and diagnostics use portable forward-slash spelling.
+- Registered command templates now expand `{dir}` token by token, preserving Windows
+  paths and spaces, while executables resolve through the host's `PATH` and `PATHEXT`.
 
 ## 0.0.7 - 2026-08-31
 

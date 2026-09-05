@@ -16,7 +16,7 @@ def _is_rooted(candidate: Path) -> bool:
     candidate: the directory to test.
     """
     manifest = candidate / Naming.CONFIG
-    return manifest.exists() and "workspace" in tomllib.loads(manifest.read_text())
+    return manifest.exists() and "workspace" in tomllib.loads(manifest.read_text(encoding="utf-8"))
 
 
 def find_roots(start: Path | None = None) -> list[Path]:

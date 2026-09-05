@@ -60,12 +60,12 @@ class TidinessLints:
     def stale_index(self) -> list[JsonValue]:
         """The index artifacts a regeneration would change, `atpx index` refreshes them."""
         expected = self.nodes.canonical()
-        return [str(path.relative_to(self.root)) for path in self.index.stale(expected)]
+        return [path.relative_to(self.root).as_posix() for path in self.index.stale(expected)]
 
     def stray_evidence(self) -> dict[str, JsonValue]:
         """Files under `evidence/` that are not certificate ledgers, per blueprint."""
         return {
-            directory.name: [str(path.relative_to(self.root)) for path in stray]
+            directory.name: [path.relative_to(self.root).as_posix() for path in stray]
             for directory in self.blueprints
             if (stray := EvidenceStore.strays(directory))
         }

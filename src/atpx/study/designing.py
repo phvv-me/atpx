@@ -73,5 +73,5 @@ class Design:
         seed = self.allocated()
         registry = ", ".join(str(base) for base in [*node.front.seeds, seed])
         node.set_field("seeds", value=f"[{registry}]")
-        path.write_text(_TEMPLATE.format(slug=slug, date=today(), seed=seed))
+        path.write_text(_TEMPLATE.format(slug=slug, date=today(), seed=seed), encoding="utf-8")
         return path

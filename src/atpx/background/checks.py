@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from importlib.metadata import version as package_version
 from pathlib import Path
+from shutil import which
 from subprocess import DEVNULL, STDOUT, Popen
 
 from ..blueprint.manifest import Blueprint
@@ -40,7 +41,7 @@ class BackgroundChecks:
         certificates = [entry for ledger in ledgers.values() for entry in ledger]
         rows = []
         for path in sorted(self.directory.glob("*.json")):
-            submission = Submission.model_validate_json(path.read_text())
+            submission = Submission.model_validate_json(path.read_text(encoding="utf-8"))
             landed = any(
                 entry.claim == f"{self.blueprint.slug}/{submission.claim}"
                 and entry.timestamp >= submission.submitted
@@ -66,7 +67,8 @@ class BackgroundChecks:
         self.directory.mkdir(parents=True, exist_ok=True)
         log = self.directory / f"{stem}.log"
         argv = [*self.launcher, Naming.NAME, "check", self.blueprint.slug, claim]
-        with log.open("w") as sink:
+        argv[0] = which(argv[0]) or argv[0]
+        with log.open("w", encoding="utf-8") as sink:
             process = Popen(
                 argv,
                 cwd=self.root,
@@ -76,10 +78,16 @@ class BackgroundChecks:
                 start_new_session=True,
             )
         record = Submission(claim=claim, submitted=stamp(submitted), pid=process.pid)
-        (self.directory / f"{stem}.json").write_text(record.model_dump_json(indent=2) + "\n")
+        (self.directory / f"{stem}.json").write_text(
+            record.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
         return Certificate.stamp(
             claim=f"{self.blueprint.slug}/{claim}",
-            result={"detached": True, "pid": process.pid, "log": str(log.relative_to(self.root))},
+            result={
+                "detached": True,
+                "pid": process.pid,
+                "log": log.relative_to(self.root).as_posix(),
+            },
             engine=Naming.NAME,
             engine_version=package_version(Naming.NAME),
             root=self.root,

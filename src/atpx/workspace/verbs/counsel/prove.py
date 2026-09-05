@@ -24,7 +24,7 @@ class ProveVerbs(FoundationState):
         timeout: probe wall-clock cap in seconds matching the spec's stated
             budget, the measured 120s default when omitted.
         """
-        text = self.filed(spec).read_text()
+        text = self.filed(spec).read_text(encoding="utf-8")
         attempt = Prover(self.lanes.prover).attempt(
             self, slug=slug, claim=claim, spec=text, repairs=repairs, timeout=timeout
         )

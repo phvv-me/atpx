@@ -23,4 +23,4 @@ class ScaffoldVerbs(FoundationState):
         if not normalized:
             raise ValueError(f"{slug!r} slugifies to nothing; use a title with real characters")
         path = Scaffold(self.nodes.path).open(normalized, Kind(kind))
-        return str(path.relative_to(self.root))
+        return path.relative_to(self.root).as_posix()

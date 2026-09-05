@@ -61,7 +61,7 @@ class Capture:
         where = f"{self.HOME}/{digest}.txt"
         path = self.directory / where
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+        path.write_text(text, encoding="utf-8")
         return {
             "output": clipped(text, limit=self.LIMIT, marker=f"whole output at {where}"),
             "elided": {"characters": len(text), "digest": f"sha256:{digest}", "path": where},

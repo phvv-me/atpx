@@ -15,8 +15,12 @@ def evidence_entries(blueprint: Path):
         for file in files
         if file.suffix in (".json", ".ndjson")
         for entry in (
-            [json.loads(line) for line in file.read_text().splitlines() if line.strip()]
+            [
+                json.loads(line)
+                for line in file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
             if file.suffix == ".ndjson"
-            else json.loads(file.read_text())
+            else json.loads(file.read_text(encoding="utf-8"))
         )
     ]

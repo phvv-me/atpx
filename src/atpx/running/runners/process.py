@@ -1,9 +1,28 @@
 import asyncio
 from collections.abc import Sequence
 from pathlib import Path
+from shutil import which
 from typing import NoReturn
 
 from patos import FrozenModel
+from psutil import NoSuchProcess, wait_procs
+from psutil import Process as SystemProcess
+
+
+def _kill_tree(pid: int) -> None:
+    """Kill one launcher and every descendant it created."""
+    try:
+        parent = SystemProcess(pid)
+        descendants = parent.children(recursive=True)
+        parent.kill()
+    except NoSuchProcess:
+        return
+    for descendant in reversed(descendants):
+        try:
+            descendant.kill()
+        except NoSuchProcess:
+            continue
+    wait_procs(descendants, timeout=5)
 
 
 class ProcessRunner(FrozenModel):
@@ -28,9 +47,10 @@ class ProcessRunner(FrozenModel):
         cap), so cancellation here must kill the child itself, or a timed-out claim would
         leave its launcher orphaned in the background.
         """
+        command = [*self.launcher, *argv]
+        command[0] = which(command[0]) or command[0]
         process = await asyncio.create_subprocess_exec(
-            *self.launcher,
-            *argv,
+            *command,
             cwd=self.root,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -39,11 +59,11 @@ class ProcessRunner(FrozenModel):
             stdout, _ = await process.communicate()
         except asyncio.CancelledError:
             await self.__killed(process)
-        return process.returncode or 0, stdout.decode()
+        return process.returncode or 0, stdout.decode("utf-8")
 
     @staticmethod
     async def __killed(process: asyncio.subprocess.Process) -> NoReturn:
-        """Kill an orphaned-by-cancellation child, reap it, then let the cancellation propagate."""
-        process.kill()
-        await process.wait()
+        """Kill an orphaned child, drain its pipes, then let cancellation propagate."""
+        _kill_tree(process.pid)
+        await process.communicate()
         raise

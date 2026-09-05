@@ -183,7 +183,7 @@ class EvidenceStore:
     @staticmethod
     def __array(file: Path) -> list[JsonValue]:
         """The pre-migration array's elements, empty with a warning when it is not one."""
-        decoded = Stream.decoded(file.read_text(), where=str(file))
+        decoded = Stream.decoded(file.read_bytes(), where=str(file))
         if isinstance(decoded, list):
             return decoded
         if decoded is not None:

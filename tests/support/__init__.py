@@ -44,6 +44,9 @@ from .result_of import (
     result_of as result_of,
 )
 from .script import (
+    ScriptFactory as ScriptFactory,
+)
+from .script import (
     script as script,
 )
 from .stamped import (

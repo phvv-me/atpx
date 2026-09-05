@@ -39,7 +39,7 @@ def api_key(root: Path) -> str:
     if exported := os.environ.get("OPENROUTER_API_KEY"):
         return exported
     try:
-        lines = (root / ".env").read_text().splitlines()
+        lines = (root / ".env").read_text(encoding="utf-8").splitlines()
     except FileNotFoundError as error:
         raise RuntimeError(f"no .env under {root} holding a {_KEY_LINE} line") from error
     for line in lines:

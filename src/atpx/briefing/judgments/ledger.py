@@ -15,7 +15,7 @@ class JudgmentLedger:
     def latest(self, node: str) -> Judgment | None:
         """The recorded judgment for a node, None before any ruling."""
         try:
-            return Judgment.model_validate_json(self.path(node).read_text())
+            return Judgment.model_validate_json(self.path(node).read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
 
@@ -28,5 +28,5 @@ class JudgmentLedger:
         judgment = Judgment(text=node.text, timestamp=stamp())
         path = self.path(node.name)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(judgment.model_dump_json(indent=2) + "\n")
+        path.write_text(judgment.model_dump_json(indent=2) + "\n", encoding="utf-8")
         return path

@@ -80,7 +80,10 @@ class Scaffold:
         if node.exists():
             raise FileExistsError(f"{slug} already has a node at {node}, refusing to overwrite")
         self.__furnished(directory, slug)
-        node.write_text(_NODE_TEMPLATE.format(slug=slug, kind=kind.value, date=today()))
+        node.write_text(
+            _NODE_TEMPLATE.format(slug=slug, kind=kind.value, date=today()),
+            encoding="utf-8",
+        )
         return node
 
     @staticmethod
@@ -90,7 +93,7 @@ class Scaffold:
         (directory / "specs").mkdir(exist_ok=True)
         manifest = directory / Naming.CONFIG
         if not manifest.exists():
-            manifest.write_text("[claims]\n")
+            manifest.write_text("[claims]\n", encoding="utf-8")
         spec = directory / "specs" / _SPEC
         if not spec.exists():
-            spec.write_text(_SPEC_TEMPLATE.format(slug=slug))
+            spec.write_text(_SPEC_TEMPLATE.format(slug=slug), encoding="utf-8")

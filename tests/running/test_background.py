@@ -1,7 +1,6 @@
 import json
 import os
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -9,20 +8,20 @@ import pytest
 from atpx import EvidenceStore, Workspace
 from atpx.background import Submission
 
-from ..support import FakeRunner, stamped
+from ..support import FakeRunner, ScriptFactory, stamped
 
 
 @pytest.fixture
-def echoing_atpx(on_path: Callable[[str, str], Path]) -> Path:
+def echoing_atpx(on_path: ScriptFactory) -> Path:
     """A fake atpx alone on PATH that echoes its argv into stdout."""
-    return on_path("atpx", 'echo "ran $@"')
+    return on_path("atpx", output="ran {args}")
 
 
 def settled(log: Path, timeout: float = 5.0) -> str:
     """The detached child's output once it lands, polling the log file."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if content := log.read_text():
+        if content := log.read_text(encoding="utf-8"):
             return content
         time.sleep(0.01)
     raise TimeoutError(f"{log} stayed empty")
@@ -47,7 +46,7 @@ def test_background_check_writes_the_submission_record(
     result = certificate.result
     assert isinstance(result, dict)
     records = sorted((space.nodes.directory("demo") / "checks").glob("*.json"))
-    submission = Submission.model_validate_json(records[0].read_text())
+    submission = Submission.model_validate_json(records[0].read_text(encoding="utf-8"))
     assert submission.claim == "ok" and submission.pid == result["pid"]
 
 

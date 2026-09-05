@@ -41,12 +41,14 @@ class StudyVerbs(FoundationState):
                 f"no note at {note}; pass --source pointing at a markdown file"
             )
         lines = [
-            line for line in note.read_text().splitlines() if not line.startswith("blueprint:")
+            line
+            for line in note.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("blueprint:")
         ]
         target = self.nodes.directory(slug) / Node.FILENAME
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("\n".join(lines) + "\n")
-        return str(target.relative_to(self.root))
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return target.relative_to(self.root).as_posix()
 
     def brief(self, slug: Slug) -> str:
         """The full agent context bundle for one blueprint node, as markdown.
@@ -68,7 +70,7 @@ class StudyVerbs(FoundationState):
 
         slug: the blueprint directory name holding the node.
         """
-        return str(Design(self.nodes).scaffold(slug).relative_to(self.root))
+        return Design(self.nodes).scaffold(slug).relative_to(self.root).as_posix()
 
     def graph(self) -> list[dict[str, str | dict[str, str] | dict[str, list[str]]]]:
         """The frontier: unsettled nodes whose wikilink dependencies are all settled."""

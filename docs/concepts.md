@@ -73,6 +73,8 @@ Each append and paired index regeneration takes a native file lock. The adjacent
 still running. ATPX sweeps it after use; on Windows, where an open lock handle cannot
 be deleted, ATPX releases its cleanup handle and retries. If a peer opens it first,
 that peer safely keeps the path and performs the next sweep when it leaves.
+After taking the lock, an append separates any unterminated tail left by a killed writer,
+so a torn record costs only itself and the next complete certificate remains readable.
 
 A claim output too large for a certificate is written whole to
 `evidence/outputs/<digest>.txt` and the certificate keeps whole lines from
@@ -87,6 +89,11 @@ claim gracefully on a host without one, and nothing enters the evidence
 ledger, since a skip is not a run). `run` registers a claim on first use, so
 the manifest is a record the tool maintains rather than a form an agent fills
 in ahead of time.
+
+ATPX reads and writes workspace text as UTF-8. Durable relative paths use `/`
+on every host. Claim templates are parsed before `{dir}` expands, keeping a
+workspace path with spaces inside one command argument, and executable lookup
+uses the host's normal `PATH` rules (including `PATHEXT` on Windows).
 
 ## Settling
 

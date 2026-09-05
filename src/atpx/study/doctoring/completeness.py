@@ -149,6 +149,6 @@ class CompletenessLints:
             path = self.root / pointer
         if not path.exists():
             return f"judgment {pointer} does not exist"
-        if not _RUNG.search(path.read_text()):
+        if not _RUNG.search(path.read_text(encoding="utf-8")):
             return f"judgment {pointer} names no attacking rung"
         return ""

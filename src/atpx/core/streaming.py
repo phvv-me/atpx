@@ -1,6 +1,7 @@
 import json
 import warnings
 from functools import cached_property
+from os import SEEK_END
 from pathlib import Path
 
 from pydantic import JsonValue
@@ -42,12 +43,12 @@ class Stream:
         look at the damage. A file that was never written answers with nothing.
         """
         try:
-            text = self.path.read_text()
+            content = self.path.read_bytes()
         except FileNotFoundError:
             return []
         numbered = [
             (f"{self.path}:{number}", line)
-            for number, line in enumerate(text.split("\n"), start=1)
+            for number, line in enumerate(content.split(b"\n"), start=1)
             if line.strip()
         ]
         return [
@@ -57,7 +58,7 @@ class Stream:
         ]
 
     @staticmethod
-    def decoded(text: str, *, where: str) -> JsonValue | None:
+    def decoded(text: str | bytes, *, where: str) -> JsonValue | None:
         """One record's JSON, None with a warning when it does not decode.
 
         text: the record's raw text.
@@ -65,7 +66,7 @@ class Stream:
         """
         try:
             found: JsonValue = json.loads(text)
-        except json.JSONDecodeError as error:
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
             return Stream.skipped(f"{where} does not decode as JSON, skipping it: {error}")
         return found
 
@@ -83,6 +84,12 @@ class Stream:
         record: the record's JSON text, without its newline.
         """
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.guard, self.path.open("a", encoding="utf-8") as stream:
-            stream.write(record + "\n")
+        payload = f"{record}\n".encode()
+        with self.guard, self.path.open("a+b") as stream:
+            stream.seek(0, SEEK_END)
+            if stream.tell():
+                stream.seek(-1, SEEK_END)
+                if stream.read(1) != b"\n":
+                    payload = b"\n" + payload
+            stream.write(payload)
         return self.path

@@ -1,19 +1,21 @@
 import asyncio
 import json
 import tempfile
-from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+from psutil import NoSuchProcess, pid_exists
+from pytest_mock import MockerFixture
 
 from atpx import Blueprint, EvidenceStore, Workspace
 from atpx.running import Capture, ProcessRunner, Running, clipped, stale_claims
+from atpx.running.runners.process import _kill_tree
 from atpx.support import drive
 
-from ..support import FakeRunner, SleepyRunner, stamped
+from ..support import FakeRunner, ScriptFactory, SleepyRunner, stamped
 
 
 @pytest.fixture
@@ -108,28 +110,49 @@ def test_bounded_stamps_exit_124_on_expiry(tmp_path: Path) -> None:
 
 
 def test_process_runner_runs_the_bare_command_from_the_root(
-    root: Path, on_path: Callable[[str, str], Path]
+    root: Path, on_path: ScriptFactory
 ) -> None:
-    on_path("probe", 'echo "probe ran: $@ in $PWD"')
+    on_path("probe", output="probe ran: {args} in {cwd}")
     exit_status, output = drive(ProcessRunner(root=root)(["probe", "checks.py"]))
     assert exit_status == 0 and f"probe ran: checks.py in {root}" in output
 
 
 def test_process_runner_hands_the_command_to_the_declared_launcher(
-    root: Path, on_path: Callable[[str, str], Path]
+    root: Path, on_path: ScriptFactory
 ) -> None:
-    on_path("launcher", 'echo "launched: $@"')
+    on_path("launcher", output="launched: {args}")
     runner = ProcessRunner(root=root, launcher=["launcher", "run", "--"])
     exit_status, output = drive(runner(["python", "checks.py"]))
     assert exit_status == 0 and "launched: run -- python checks.py" in output
 
 
-def test_process_runner_kills_a_cancelled_child(
-    root: Path, on_path: Callable[[str, str], Path]
-) -> None:
-    on_path("probe", "while :; do :; done")
+def test_process_runner_kills_a_cancelled_child(root: Path, on_path: ScriptFactory) -> None:
+    on_path("probe", forever=True)
+    pid_file = root / "probe.pid"
     with pytest.raises(TimeoutError):
-        drive(asyncio.wait_for(ProcessRunner(root=root)(["probe"]), timeout=0.05))
+        drive(asyncio.wait_for(ProcessRunner(root=root)(["probe", str(pid_file)]), timeout=0.5))
+    assert not pid_exists(int(pid_file.read_text(encoding="utf-8")))
+
+
+def test_process_tree_cleanup_tolerates_an_exited_parent(mocker: MockerFixture) -> None:
+    process = mocker.patch(
+        "atpx.running.runners.process.SystemProcess",
+        side_effect=NoSuchProcess(7),
+    )
+    _kill_tree(7)
+    process.assert_called_once_with(7)
+
+
+def test_process_tree_cleanup_tolerates_an_exited_descendant(mocker: MockerFixture) -> None:
+    parent = mocker.MagicMock()
+    descendant = mocker.MagicMock()
+    descendant.kill.side_effect = NoSuchProcess(8)
+    parent.children.return_value = [descendant]
+    mocker.patch("atpx.running.runners.process.SystemProcess", return_value=parent)
+    waited = mocker.patch("atpx.running.runners.process.wait_procs")
+    _kill_tree(7)
+    parent.kill.assert_called_once_with()
+    waited.assert_called_once_with([descendant], timeout=5)
 
 
 def test_swept_returns_one_certificate_per_claim(root: Path) -> None:

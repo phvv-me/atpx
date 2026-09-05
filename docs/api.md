@@ -9,8 +9,8 @@ gates mean, see [Concepts](concepts.md); for a walkthrough, see
 ```python
 import atpx
 
-ws = atpx.workspace()          # ATPX_ROOT when set, else discovered from the cwd
-ws = atpx.workspace("research/thoughtlens")   # or any directory inside that workspace
+ws = atpx.workspace()  # ATPX_ROOT when set, else discovered from the cwd
+ws = atpx.workspace("research/thoughtlens")  # or any directory inside that workspace
 ```
 
 Every verb below is a `Workspace` method and an `atpx` CLI command. The verbs

@@ -114,7 +114,7 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     @cached_property
     def manifest(self) -> Mapping[str, Mapping[str, JsonValue]]:
         """The parsed root manifest, read once per workspace."""
-        return tomllib.loads((self.root / Naming.CONFIG).read_text())
+        return tomllib.loads((self.root / Naming.CONFIG).read_text(encoding="utf-8"))
 
     @cached_property
     def nodes(self) -> NodeStore:

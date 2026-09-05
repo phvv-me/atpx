@@ -65,6 +65,11 @@ blueprints = "research/math"
 runner = "uv run --"   # your environment tool; empty by default: run the command as written
 ```
 
+Command templates use shell-style quoting on every host. ATPX expands `{dir}`
+inside each parsed argument, so workspace paths containing spaces stay one
+argument on Windows, macOS, and Linux. Executables are found through the host's
+normal `PATH` rules, including `PATHEXT` on Windows.
+
 `blueprints` takes a list as readily as a string, `["math", "experiments"]`,
 and the roots are read as one graph, which is what a program needs once its
 claims of record move between trees. A node carrying `superseded_by` is an
@@ -108,6 +113,10 @@ a form the agent fills. The command is a leading-hyphen var-positional, so
 `--seed` and `--timeout` before the command tokens, and separate a command that
 itself takes those flags with `--`.
 
+Workspace text files are UTF-8 on every host. Relative paths written into
+certificates and diagnostics use `/`, so the durable record is independent of
+the operating system that produced it.
+
 Arguments are plain shell tokens under cyclopts, so a multi-word query needs
 only ordinary quoting, `atpx recall "Leech lattice"`, never the doubled
 quoting the old fire CLI required. Options follow their verb's signature
@@ -143,11 +152,11 @@ ws = atpx.workspace()
 
 # the I/O verbs are async, so they compose on one event loop
 certificate = await ws.run("voronoi-e8-codec", "bijectivity-m1", "python", "checks.py")
-await ws.recall("196560, 16773120")   # the Leech theta series turns up OEIS A008408
+await ws.recall("196560, 16773120")  # the Leech theta series turns up OEIS A008408
 
 # synchronous scripts and one-liners block on them through the sync facade
 ws.sync.recall("196560, 16773120")
-ws.status()   # the local readers stay plain sync
+ws.status()  # the local readers stay plain sync
 ```
 
 ## Recall
@@ -351,12 +360,12 @@ probes that turn folklore into one-liners.
 from atpx.adversarial import boundary_ties, precision_tilt, rederive, seed_sensitivity
 
 sweep = seed_sensitivity(lambda seed: run_check(seed), seeds=range(8))
-assert sweep.stable, sweep.outcomes          # a nonzero spread is a refutation lead
+assert sweep.stable, sweep.outcomes  # a nonzero spread is a refutation lead
 
-ties = boundary_ties([[2, 0], [1, 1]])       # exact dyadic midpoints v/2, decoder tie bait
-batches = precision_tilt(ties, [2**-20, 2**-30, 2**-40])   # verdicts must survive tilts
+ties = boundary_ties([[2, 0], [1, 1]])  # exact dyadic midpoints v/2, decoder tie bait
+batches = precision_tilt(ties, [2**-20, 2**-30, 2**-40])  # verdicts must survive tilts
 
-verdict = rederive(basis_a, basis_b)         # exact unimodular change-of-basis check
+verdict = rederive(basis_a, basis_b)  # exact unimodular change-of-basis check
 assert verdict.same_lattice, verdict.determinant
 ```
 
@@ -378,6 +387,8 @@ flight. The purely local or CPU-bound verbs (`status`, `graph`, `brief`,
 File-backed writes are serialized by native locks. Their adjacent `.lock` paths are
 cleanup markers rather than ownership records: ATPX sweeps them after use, including
 the release-before-delete path Windows requires for an open lock handle.
+A new append also terminates any partial tail left by a killed writer before writing its
+own record, so the damaged record cannot make the next certificate unreadable.
 
 The CLI never exposes any of this, cyclopts owns the event loop and runs sync
 and async verbs alike. In Python, async code awaits the verbs directly and

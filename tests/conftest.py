@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 
@@ -6,7 +6,7 @@ import pytest
 
 from atpx import Capability, Engine, Workspace
 
-from .support import FakeRunner, node_text, planted, script
+from .support import FakeRunner, ScriptFactory, node_text, planted, script
 
 
 @pytest.fixture
@@ -81,10 +81,14 @@ def space(root: Path, runner: FakeRunner) -> Workspace:
 
 
 @pytest.fixture
-def on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[[str, str], Path]:
+def on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ScriptFactory:
     """A factory that installs a named executable with a given body, alone on PATH."""
     monkeypatch.setenv("PATH", str(tmp_path))
-    return lambda name, body: script(tmp_path, name, body=body)
+
+    def installed(name: str, *, output: str | None = None, forever: bool = False) -> Path:
+        return script(tmp_path, name, output=output, forever=forever)
+
+    return installed
 
 
 @pytest.fixture

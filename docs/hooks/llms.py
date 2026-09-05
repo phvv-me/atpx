@@ -10,10 +10,7 @@ Each entry maps a section name to the doc paths under `docs/`, in order.
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from mkdocs.config.defaults import MkDocsConfig
+from typing import Protocol
 
 _SECTIONS: dict[str, list[str]] = {
     "Usage": ["index.md"],
@@ -25,6 +22,25 @@ _FENCED_CODE = re.compile(r"^```.*?^```", re.DOTALL | re.MULTILINE)
 _H1 = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 
 
+class LlmsConfig(Protocol):
+    """Configuration values consumed by the post-build hook."""
+
+    @property
+    def site_name(self) -> str: ...
+
+    @property
+    def site_description(self) -> str | None: ...
+
+    @property
+    def site_url(self) -> str | None: ...
+
+    @property
+    def docs_dir(self) -> str: ...
+
+    @property
+    def site_dir(self) -> str: ...
+
+
 class LlmsTxtBuild:
     """Write `llms.txt` and `llms-full.txt` from one finished mkdocs build.
 
@@ -34,7 +50,7 @@ class LlmsTxtBuild:
     reads its own instance state.
     """
 
-    def __init__(self, config: MkDocsConfig) -> None:
+    def __init__(self, config: LlmsConfig) -> None:
         self.config = config
 
     def write(self) -> None:
@@ -89,6 +105,6 @@ class LlmsTxtBuild:
         return "Home" if stem == "index" else stem
 
 
-def on_post_build(config: MkDocsConfig) -> None:
+def on_post_build(config: LlmsConfig) -> None:
     """Write `llms.txt` and `llms-full.txt` into the built `site/`."""
     LlmsTxtBuild(config).write()

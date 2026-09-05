@@ -8,5 +8,5 @@ def written(text: str) -> Node:
     """A node written under a throwaway blueprint directory named `note`."""
     path = Path(tempfile.mkdtemp()) / "note" / "node.md"
     path.parent.mkdir()
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     return Node(path)

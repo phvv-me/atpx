@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -10,17 +12,31 @@ from hypothesis import strategies as st
 
 from atpx import Certificate, EvidenceStore
 from atpx.core import EvidenceError, TornLedger
+from atpx.core.streaming import Stream
 
 from ..support import stamped
 
 claims = st.lists(st.text(min_size=1, max_size=30), min_size=1, max_size=5)
 _WORKERS = 8
+_PROCESS_APPEND = """
+import sys
+import time
+from pathlib import Path
+
+from atpx.core.streaming import Stream
+
+ledger = Path(sys.argv[1])
+start = Path(sys.argv[2])
+while not start.exists():
+    time.sleep(0.001)
+Stream(ledger).append(sys.argv[3])
+"""
 
 
 def torn(path: Path, *lines: str) -> None:
     """Overwrite one stream ledger with the given raw lines, whatever they hold."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(f"{line}\n" for line in lines))
+    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
 
 
 @given(claims)
@@ -40,8 +56,8 @@ def test_every_append_adds_exactly_one_line_and_rewrites_nothing(claims: Sequenc
         prefixes = []
         for claim in claims:
             store.append(stamped(claim=claim))
-            prefixes.append(store.path.read_text())
-        lines = store.path.read_text().split("\n")[:-1]
+            prefixes.append(store.path.read_text(encoding="utf-8"))
+        lines = store.path.read_text(encoding="utf-8").split("\n")[:-1]
         assert len(lines) == len(claims)
         pairs = zip(prefixes, prefixes[1:], strict=False)
         assert all(later.startswith(earlier) for earlier, later in pairs)
@@ -62,6 +78,43 @@ def test_concurrent_appends_never_lose_a_certificate(tmp_path: Path) -> None:
         thread.join()
     landed = {entry.claim for entry in EvidenceStore(tmp_path).read()}
     assert landed == {f"claim-{index}" for index in range(_WORKERS)}
+
+
+def test_process_appends_are_complete_and_distinct(tmp_path: Path) -> None:
+    """Native locks serialize separate writers, not only threads in one interpreter."""
+    ledger = tmp_path / "ledger.ndjson"
+    start = tmp_path / "start"
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-c", _PROCESS_APPEND, str(ledger), str(start), json.dumps(index)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for index in range(_WORKERS)
+    ]
+    start.touch()
+    results = [process.communicate(timeout=30) for process in processes]
+    assert [
+        (process.returncode, stdout, stderr)
+        for process, (stdout, stderr) in zip(processes, results, strict=True)
+        if process.returncode
+    ] == []
+    records = [record for _, record in Stream(ledger).records]
+    assert len(records) == _WORKERS
+    assert all(index in records for index in range(_WORKERS))
+
+
+def test_append_after_a_torn_tail_preserves_the_next_record(tmp_path: Path) -> None:
+    """A killed writer costs its own partial line, not the next successful append."""
+    store = EvidenceStore(tmp_path)
+    store.path.parent.mkdir(parents=True)
+    store.path.write_bytes(b'{"claim":"cut\xe2')
+    with pytest.warns(TornLedger):
+        store.append(stamped(claim="survives"))
+    with pytest.warns(TornLedger):
+        assert [entry.claim for entry in store.read()] == ["survives"]
+    assert store.path.read_bytes().startswith(b'{"claim":"cut\xe2\n{')
 
 
 def test_read_before_any_write_is_empty(tmp_path: Path) -> None:
@@ -137,18 +190,21 @@ def test_the_pre_migration_array_reads_transparently_beside_the_stream(tmp_path:
     store = EvidenceStore(tmp_path)
     history = [stamped(claim="old-1").model_dump(), stamped(claim="old-2").model_dump()]
     store.array.parent.mkdir(parents=True)
-    store.array.write_text(json.dumps(history, indent=2) + "\n")
-    before = store.array.read_text()
+    store.array.write_text(json.dumps(history, indent=2) + "\n", encoding="utf-8")
+    before = store.array.read_text(encoding="utf-8")
     store.append(stamped(claim="new"))
     assert [entry.claim for entry in store.read()] == ["old-1", "old-2", "new"]
-    assert store.array.read_text() == before
-    assert store.path.read_text() == stamped(claim="new").model_dump_json() + "\n"
+    assert store.array.read_text(encoding="utf-8") == before
+    assert store.path.read_text(encoding="utf-8") == stamped(claim="new").model_dump_json() + "\n"
 
 
 def test_a_torn_array_element_costs_only_itself(tmp_path: Path) -> None:
     store = EvidenceStore(tmp_path)
     store.array.parent.mkdir(parents=True)
-    store.array.write_text(json.dumps([stamped(claim="kept").model_dump(), {"claim": "half"}]))
+    store.array.write_text(
+        json.dumps([stamped(claim="kept").model_dump(), {"claim": "half"}]),
+        encoding="utf-8",
+    )
     with pytest.warns(TornLedger, match=r"\[2\] is not a certificate"):
         assert [entry.claim for entry in store.read()] == ["kept"]
 
@@ -158,9 +214,9 @@ def broken_home(tmp_path: Path) -> Path:
     """An evidence directory holding three non-ledger files beside a real ledger."""
     home = tmp_path / "evidence"
     home.mkdir(parents=True)
-    (home / "broken.json").write_text("{not json")
-    (home / "shaped_wrong.json").write_text('["just", "strings"]')
-    (home / "not_an_array.json").write_text('{"rows": []}')
+    (home / "broken.json").write_text("{not json", encoding="utf-8")
+    (home / "shaped_wrong.json").write_text('["just", "strings"]', encoding="utf-8")
+    (home / "not_an_array.json").write_text('{"rows": []}', encoding="utf-8")
     (home / "baselines.parquet").write_bytes(b"PAR1")
     EvidenceStore(tmp_path).append(stamped())
     return tmp_path
@@ -177,7 +233,7 @@ def test_ledgers_skip_and_strays_report_broken_files(broken_home: Path) -> None:
 def test_hosts_fold_the_two_formats_of_one_host_into_one_reading(tmp_path: Path) -> None:
     store = EvidenceStore(tmp_path)
     store.array.parent.mkdir(parents=True)
-    store.array.write_text(json.dumps([stamped(claim="old").model_dump()]))
+    store.array.write_text(json.dumps([stamped(claim="old").model_dump()]), encoding="utf-8")
     store.append(stamped(claim="new"))
     assert EvidenceStore.hosts(tmp_path) == [store.hostname]
     assert [entry.claim for entry in EvidenceStore.ledgers(tmp_path)[store.hostname]] == [
@@ -214,7 +270,7 @@ def test_a_stream_line_is_always_one_whole_certificate(outputs: Sequence[str]) -
             store.append(
                 stamped(claim=f"demo/{index}").model_copy(update={"result": {"output": output}})
             )
-        lines = store.path.read_text().split("\n")[:-1]
+        lines = store.path.read_text(encoding="utf-8").split("\n")[:-1]
         assert [Certificate.model_validate_json(line).result for line in lines] == [
             {"output": output} for output in outputs
         ]

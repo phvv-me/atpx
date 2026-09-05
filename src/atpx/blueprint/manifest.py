@@ -45,7 +45,7 @@ class Blueprint(FrozenModel):
         config = directory / Naming.CONFIG
         if not config.exists():
             raise FileNotFoundError(f"no blueprint {directory.name!r} at {directory}")
-        manifest = tomlkit.parse(config.read_text())
+        manifest = tomlkit.parse(config.read_text(encoding="utf-8"))
         return cls(slug=directory.name, directory=directory, claims=manifest.get("claims", {}))
 
     @classmethod
@@ -109,18 +109,23 @@ class Blueprint(FrozenModel):
 
         claim: the claim name declared in `atpx.toml`.
         """
-        return shlex.split(self.claim(claim).command.format(dir=self.directory))
+        tokens = shlex.split(self.claim(claim).command)
+        return [token.format(dir=self.directory) for token in tokens]
 
     @staticmethod
     def __persist(directory: Path, recorded: TOMLDocument) -> None:
         """Create the blueprint directory when needed and write its manifest back to disk."""
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / Naming.CONFIG).write_text(tomlkit.dumps(recorded))
+        (directory / Naming.CONFIG).write_text(tomlkit.dumps(recorded), encoding="utf-8")
 
     @staticmethod
     def __read(manifest: Path) -> TOMLDocument:
         """The manifest's parsed TOML document, empty when no manifest exists yet."""
-        return tomlkit.parse(manifest.read_text()) if manifest.exists() else tomlkit.document()
+        return (
+            tomlkit.parse(manifest.read_text(encoding="utf-8"))
+            if manifest.exists()
+            else tomlkit.document()
+        )
 
     def __suggestion(self, name: str) -> str:
         """A close-match hint ahead of the known-claims roster, empty when nothing is close."""

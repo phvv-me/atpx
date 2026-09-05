@@ -121,7 +121,7 @@ class LedgerIndex:
             return [
                 path
                 for path, text in expected.items()
-                if not path.exists() or path.read_text() != text
+                if not path.exists() or path.read_text(encoding="utf-8") != text
             ]
 
     def state(self, node: Node) -> str:
@@ -139,7 +139,7 @@ class LedgerIndex:
         """
         if not self.path.exists():
             return self.path.stem, ""
-        text = self.path.read_text()
+        text = self.path.read_text(encoding="utf-8")
         lines = text.splitlines()
         title = next(
             (line.removeprefix("# ") for line in lines if line.startswith("# ")), self.path.stem
@@ -170,8 +170,8 @@ class LedgerIndex:
         with self.guard:
             self.__refuse_blanking(nodes)
             text = self.render(nodes)
-            self.path.write_text(text)
-            self.graph_path.write_text(self.rendered_graph(nodes))
+            self.path.write_text(text, encoding="utf-8")
+            self.graph_path.write_text(self.rendered_graph(nodes), encoding="utf-8")
             return text
 
     @staticmethod
@@ -183,7 +183,11 @@ class LedgerIndex:
         """The generated node rows the index on disk already holds, none when it has none."""
         if not self.path.exists():
             return []
-        return [line for line in self.path.read_text().splitlines() if line.startswith("| [[")]
+        return [
+            line
+            for line in self.path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("| [[")
+        ]
 
     def __refuse_blanking(self, nodes: Sequence[Node]) -> None:
         """Refuse a regeneration that found nothing over an index that carries rows.
@@ -199,7 +203,7 @@ class LedgerIndex:
         """
         if nodes or not (carried := self.__carried()):
             return
-        roots = ", ".join(str(root) for root in self.roots) or "none declared"
+        roots = ", ".join(root.as_posix() for root in self.roots) or "none declared"
         raise BlankIndexError(
             f"regenerating {self.path} found no nodes while the index on disk carries "
             f"{len(carried)}, so the blueprint roots searched are wrong rather than "

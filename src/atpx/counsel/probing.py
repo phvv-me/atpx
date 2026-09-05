@@ -42,7 +42,7 @@ def staged(
     timeout: hard wall-clock cap in seconds, the measured probe timeout by default.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(probe)
+    path.write_text(probe, encoding="utf-8")
     relative = path.relative_to(space.root).as_posix()
     return drive(space.run(name, claim, "python", relative, timeout=timeout))
 
@@ -80,7 +80,7 @@ def tactics(blueprints: Sequence[Path]) -> str:
     blueprints: the declared blueprint roots, in declaration order.
     """
     found = next((root / _TACTICS for root in blueprints if (root / _TACTICS).exists()), None)
-    return found.read_text() if found else ""
+    return found.read_text(encoding="utf-8") if found else ""
 
 
 def charge(contract: str, *, lessons: str) -> str:
@@ -128,5 +128,5 @@ def recorded(directory: Path, name: str, entry: dict[str, JsonValue]) -> None:
     """
     path = directory / "attempts" / f"{name}.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as handle:
+    with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry) + "\n")

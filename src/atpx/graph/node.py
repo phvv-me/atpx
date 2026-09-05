@@ -184,7 +184,7 @@ class Node:
     @property
     def text(self) -> str:
         """Current file content."""
-        return self.path.read_text()
+        return self.path.read_text(encoding="utf-8")
 
     def append_evidence(self, line: str) -> None:
         """Append one bullet at the end of the evidence section, and nowhere else.
@@ -207,7 +207,9 @@ class Node:
                 f"{self.name} has no {headings} section; "
                 "add one below the statement before noting evidence"
             )
-        self.path.write_text("\n".join(self.__inserted(lines, start, line)) + "\n")
+        self.path.write_text(
+            "\n".join(self.__inserted(lines, start, line)) + "\n", encoding="utf-8"
+        )
 
     def append_log(self, line: str) -> None:
         """Append one formatted line to the `## Log` section, creating it when missing.
@@ -219,7 +221,9 @@ class Node:
         if start is None:
             lines += ["", f"{_LOG_HEADING}    (append-only: [who/tag YYYY-MM-DD] one line)"]
             start = len(lines) - 1
-        self.path.write_text("\n".join(self.__inserted(lines, start, line)) + "\n")
+        self.path.write_text(
+            "\n".join(self.__inserted(lines, start, line)) + "\n", encoding="utf-8"
+        )
 
     def set_field(self, key: str, *, value: str) -> None:
         """Rewrite one frontmatter field in place, opening a block when the node has none.
@@ -236,7 +240,7 @@ class Node:
         field = f"{key}: {value}"
         if not lines or lines[0] != "---":
             lines[:0] = ["---", field, "---", ""]
-            self.path.write_text("\n".join(lines) + "\n")
+            self.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
             return
         fence = self.__closing_fence(lines)
         for position in range(1, fence):
@@ -245,7 +249,7 @@ class Node:
                 break
         else:
             lines.insert(1, field)
-        self.path.write_text("\n".join(lines) + "\n")
+        self.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def set_status(self, status: Status) -> None:
         """Rewrite the frontmatter `status` field, the lifecycle's one mutable field.
