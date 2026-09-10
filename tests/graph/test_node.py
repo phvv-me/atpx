@@ -155,6 +155,30 @@ def test_superseded_by_still_reads_a_real_pointer() -> None:
     assert node.superseded_by == "moved-node" and node.superseded
 
 
+def test_links_read_wikilinks_and_okf_markdown_links_alike() -> None:
+    node = written(
+        node_text(
+            body="Leans on [[dep]], on [the sibling](../sibling/node.md), on "
+            "[the rooted one](/experiments/rooted/node.md#statement), and cites "
+            "[the paper](../paper/report.md)."
+        )
+    )
+    assert node.links == ["dep", "sibling", "rooted"]
+
+
+def test_aliases_are_the_names_the_node_still_answers_to() -> None:
+    assert written(node_text(front={"aliases": "[old-name]"})).aliases == ["old-name"]
+    assert written(node_text()).aliases == []
+
+
+def test_the_first_sentence_is_what_an_index_quotes() -> None:
+    assert written(node_text(body="It holds. And more.", refutation=None)).sentence == "It holds."
+    assert written(node_text(body="One line, no stop", refutation=None)).sentence == (
+        "One line, no stop"
+    )
+    assert written(node_text(body="<!-- to write -->", refutation=None)).sentence == ""
+
+
 def test_the_statement_of_record_is_the_statement_section() -> None:
     node = written(node_text(body="The claim.") + "\n## Proof\n\nargument\n")
     assert node.headline == "Demo Node"

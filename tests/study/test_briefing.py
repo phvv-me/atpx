@@ -3,7 +3,7 @@ from pathlib import Path
 from atpx import Blueprint, EvidenceStore, Node, Workspace
 from atpx.briefing import Briefing, JudgmentLedger, last_judgment
 
-from ..support import FakeRunner, stamped
+from ..support import FakeRunner, node_text, planted, stamped
 
 
 def test_judgment_ledger_roundtrips_and_starts_empty(root: Path) -> None:
@@ -98,3 +98,21 @@ def test_judge_brief_with_nothing_new_says_so(space: Workspace) -> None:
     text = space.judge_brief("demo")
     assert "Unchanged." in text
     assert "None." in text
+
+
+def test_the_brief_resolves_a_dependency_written_under_a_name_the_node_has_left(
+    root: Path,
+) -> None:
+    blueprints = root / "research" / "math"
+    planted(
+        blueprints,
+        "renamed",
+        text=node_text("validated", title="Renamed", front={"aliases": "[old-name]"}),
+    )
+    planted(
+        blueprints,
+        "reader",
+        text=node_text("open", title="Reader", body="Leans on [[old-name]]."),
+    )
+    text = Workspace(root, runner=FakeRunner()).brief("reader")
+    assert "- [[old-name]] is validated, recorded under [[renamed]]" in text

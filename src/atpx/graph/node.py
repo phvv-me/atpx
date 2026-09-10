@@ -8,7 +8,7 @@ from .journal import LogEntry
 from .result import ResultDocument
 from .status import Status
 
-_WIKILINK = re.compile(r"\[\[([^\]|#]+)")
+_LINK = re.compile(r"\[\[([^\]|#]+)|\[[^\]]*\]\(([^)\s]+)\)")
 _TAG = re.compile(r"(?<!\S)#([\w-]+)")
 _LOG_HEADING = "## Log"
 _LOG_LINE = re.compile(r"^- \[(\w+)/([\w.-]+) (\d{4}-\d{2}-\d{2})\] (.*)$", re.MULTILINE)
@@ -63,6 +63,11 @@ class Node:
         self.path = path
 
     @property
+    def aliases(self) -> list[str]:
+        """The former names this node still answers to, from the frontmatter `aliases` list."""
+        return self.front.aliases
+
+    @property
     def conditioned(self) -> bool:
         """Whether the node states an explicit refutation condition anywhere in its text."""
         return "refutation condition" in self.text.lower()
@@ -95,8 +100,19 @@ class Node:
 
     @property
     def links(self) -> list[str]:
-        """Wikilink targets in order of appearance, duplicates removed."""
-        return list(dict.fromkeys(_WIKILINK.findall(self.text)))
+        """Link targets in order of appearance, duplicates removed.
+
+        A node is linked two ways and both are the same edge: `[[slug]]`, the ledger's
+        own spelling, and the ordinary relative markdown link the Open Knowledge Format
+        writes, `[text](../slug/node.md)`. A markdown link that points anywhere but a
+        node document is prose rather than an edge and names nothing here.
+        """
+        found = [
+            slug
+            for wikilink, target in _LINK.findall(self.text)
+            if (slug := wikilink or self.__linked(target))
+        ]
+        return list(dict.fromkeys(found))
 
     @property
     def log(self) -> list[LogEntry]:
@@ -186,6 +202,17 @@ class Node:
             return Status(value) if value else None
         except ValueError:
             return None
+
+    @property
+    def sentence(self) -> str:
+        """The statement's first sentence on one line, empty when it is placeholder-only.
+
+        What an index entry says about a node that describes itself nowhere else, so a
+        reader meets the claim rather than only its slug.
+        """
+        prose = " ".join(_COMMENT.sub("", self.statement).split())
+        head, dot, _ = prose.partition(". ")
+        return head + dot.strip()
 
     @property
     def summary(self) -> str:
@@ -290,6 +317,15 @@ class Node:
         status: the new lifecycle status.
         """
         self.set_field("status", value=status.value)
+
+    @classmethod
+    def __linked(cls, target: str) -> str:
+        """The slug a markdown link names, empty when it points at no node document.
+
+        target: the link's raw target, `../slug/node.md` or `/experiments/slug/node.md`.
+        """
+        parts = target.partition("#")[0].split("/")
+        return parts[-2] if len(parts) > 1 and parts[-1] == cls.FILENAME else ""
 
     @staticmethod
     def __closing_fence(lines: Sequence[str]) -> int:

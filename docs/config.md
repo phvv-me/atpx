@@ -12,12 +12,14 @@ either tool naming the other.
 | `index` | string | `<first root>/INDEX.md` | where the generated index note lands, root-relative |
 | `runner` | string | `""` | the command prefix every claim, background check and Lean build runs behind |
 | `lean` | string | `"lean-build"` | the declared task name that runs the Lean build |
+| `okf_version` | string | `""` | the Open Knowledge Format version this index is the bundle root of, written as the index's one frontmatter key; no frontmatter at all when unset |
 
 ```toml
 [workspace]
 blueprints = ["math", "experiments"]
-index = "math/INDEX.md"
+index = "experiments/index.md"
 runner = "mainboard run --"
+okf_version = "0.2"
 ```
 
 `blueprints` takes a list as readily as a string. Roots resolve in declaration

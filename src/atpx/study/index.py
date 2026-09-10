@@ -1,17 +1,27 @@
 import json
+import os
 from collections.abc import Sequence
 from functools import cached_property
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import ClassVar
 
 from ..core.locking import Guard
+from ..graph.aliasing import Aliases
 from ..graph.category import Category
 from ..graph.node import Node
+from ..graph.status import Status
 from .exceptions import BlankIndexError
+
+_UNSTATED = "unstated"
 
 
 class LedgerIndex:
-    """The generated workspace index: one markdown table and one graph JSON beside it.
+    """The generated workspace index: an Open Knowledge Format note and a graph JSON beside it.
+
+    The note is what the format calls an index, a section per state with one bullet per
+    node, and it carries no frontmatter at all unless the workspace declares itself a
+    bundle root, the one place `okf_version` is allowed. The generated table under the
+    bullets is the same state again for the readers that already parse it.
 
     Both artifacts regenerate from node state alone, so the committed index can
     never silently drift from the ledger: `doctor` fails when a regeneration
@@ -36,14 +46,17 @@ class LedgerIndex:
     )
     MANUAL: ClassVar[str] = "## Manual    (hand-authored, preserved verbatim)"
 
-    def __init__(self, path: Path, *roots: Path) -> None:
+    def __init__(self, path: Path, *roots: Path, okf_version: str = "") -> None:
         """path: the index markdown file the workspace manifest declares.
 
         roots: the blueprint roots the nodes were read from, named when a
             regeneration finds none of them and the refusal has to say where it looked.
+        okf_version: the Open Knowledge Format version this index is the bundle root of,
+            written as its one permitted frontmatter key; no frontmatter at all when empty.
         """
         self.path = path
         self.roots = roots
+        self.okf_version = okf_version
 
     @property
     def graph_path(self) -> Path:
@@ -63,16 +76,28 @@ class LedgerIndex:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         return Guard(self.path)
 
+    def bullet(self, node: Node) -> str:
+        """One OKF index entry, `* [Title](relative-url) - description`."""
+        described = self.described(node)
+        link = f"* [{self.titled(node)}]({self.url(node)})"
+        return f"{link} - {described}" if described else link
+
     def claim(self, node: Node) -> str:
         """One node's one-line claim, its `summary` or its statement heading."""
         return node.summary or node.headline
+
+    def described(self, node: Node) -> str:
+        """One node's index description: its OKF `description`, else its first sentence."""
+        return node.front.description or node.sentence
 
     def graph(self, nodes: Sequence[Node]) -> dict[str, list[dict[str, str]]]:
         """The blueprint-shaped graph: nodes with slug, root, state, and claim; edges from depends.
 
         Every row carries the blueprints root the node was found under, so a reader
         with several roots knows which tree a slug lives in and can take this file as
-        its roster rather than keeping a second list of its own.
+        its roster rather than keeping a second list of its own. An edge naming a slug
+        a node has since left resolves to the node of record, so the graph never carries
+        an arrow pointing at a name nothing answers to.
         """
         ordered = sorted(nodes, key=lambda node: node.name)
         rows = [
@@ -84,27 +109,62 @@ class LedgerIndex:
             }
             for node in ordered
         ]
+        aliases = {alias: node.name for alias, node in Aliases(ordered).resolved().items()}
         edges = [
-            {"from": node.name, "to": dependency}
+            {"from": node.name, "to": aliases.get(dependency, dependency)}
             for node in ordered
             for dependency in node.front.depends
         ]
         return {"nodes": rows, "edges": edges}
 
+    def preamble(self) -> str:
+        """The bundle root's frontmatter, empty unless the workspace declares an OKF version.
+
+        The format gives an index no frontmatter at all, with one exception: the bundle
+        root may carry `okf_version` and nothing else, so that is the only key written here.
+        """
+        return f'---\nokf_version: "{self.okf_version}"\n---' if self.okf_version else ""
+
     def render(self, nodes: Sequence[Node]) -> str:
         """The full regenerated index text, manual prose preserved.
+
+        The format's own body leads, one section per state with a bullet per node, and
+        the generated table follows it for the readers that already parse one. Both
+        regenerate from node state alone, so neither can drift from the other.
 
         nodes: every blueprint node the store tracks.
         """
         title, manual = self.surroundings()
-        blocks = [f"# {title}", self.MARK, self.table(nodes)]
+        blocks = [
+            self.preamble(),
+            f"# {title}",
+            self.MARK,
+            self.sections(nodes),
+            self.table(nodes),
+        ]
         if manual:
             blocks.append(f"{self.MANUAL}\n\n{manual}")
-        return "\n\n".join(blocks) + "\n"
+        return "\n\n".join(filter(None, blocks)) + "\n"
 
     def rendered_graph(self, nodes: Sequence[Node]) -> str:
         """The graph JSON artifact's exact text."""
         return json.dumps(self.graph(nodes), indent=2) + "\n"
+
+    def sections(self, nodes: Sequence[Node]) -> str:
+        """The OKF body: one `# <state>` section per state, one bullet per node under it.
+
+        Sections order down the certification ladder, so a reader meets what is settled
+        before what is still owed, and a state outside the ladder sorts after it under a
+        heading of its own.
+        """
+        grouped: dict[str, list[Node]] = {}
+        for node in sorted(nodes, key=lambda node: node.name):
+            grouped.setdefault(self.state(node) or _UNSTATED, []).append(node)
+        return "\n\n".join(
+            f"# {state.replace('_', ' ').capitalize()}\n\n"
+            + "\n".join(self.bullet(node) for node in grouped[state])
+            for state in sorted(grouped, key=self.__rung)
+        )
 
     def stale(self, nodes: Sequence[Node]) -> list[Path]:
         """The artifacts a regeneration would change, empty when the index is current.
@@ -127,7 +187,7 @@ class LedgerIndex:
     def state(self, node: Node) -> str:
         """One node's index state: its raw status, or its kind for a statusless special node."""
         special = node.front.category is not Category.CLAIM
-        return node.raw_status or (node.front.kind or "" if special else "")
+        return node.raw_status or (node.front.type or "" if special else "")
 
     def surroundings(self) -> tuple[str, str]:
         """The (title, manual prose) the regeneration preserves from the existing file.
@@ -136,6 +196,9 @@ class LedgerIndex:
         manual heading. A hand-authored file donates its first `# ` heading as
         the title and its entire remaining body as the manual prose, so the
         first generation moves hand-written sections instead of deleting them.
+        Its frontmatter is not part of that body: this generator writes the
+        index frontmatter the format allows, so carrying an old block into the
+        manual section would leave the file with two.
         """
         if not self.path.exists():
             return self.path.stem, ""
@@ -146,7 +209,7 @@ class LedgerIndex:
         )
         if self.MARK in text:
             return title, text.partition(self.MANUAL)[2].strip()
-        body = [line for line in lines if line != f"# {title}"]
+        body = [line for line in self.__unfenced(lines) if line != f"# {title}"]
         return title, "\n".join(body).strip()
 
     def table(self, nodes: Sequence[Node]) -> str:
@@ -157,6 +220,14 @@ class LedgerIndex:
             for node in sorted(nodes, key=lambda node: node.name)
         ]
         return "\n".join(["| Node | State | Claim |", "| --- | --- | --- |", *rows])
+
+    def titled(self, node: Node) -> str:
+        """One node's index title: its OKF `title`, else its slug."""
+        return node.front.title or node.name
+
+    def url(self, node: Node) -> str:
+        """The link from the index to one node document, relative and POSIX-spelled."""
+        return PurePath(os.path.relpath(node.path, self.path.parent)).as_posix()
 
     def write(self, nodes: Sequence[Node]) -> str:
         """Write both artifacts under the lock, returning the index markdown.
@@ -178,6 +249,22 @@ class LedgerIndex:
     def __cell(text: str) -> str:
         """One table cell's text, pipes escaped so a claim can never break the row."""
         return text.replace("|", "\\|")
+
+    @staticmethod
+    def __rung(state: str) -> tuple[int, str]:
+        """One state's sort key: its rung on the certification ladder, then its own name."""
+        ladder = [status.value for status in Status]
+        return (ladder.index(state), "") if state in ladder else (len(ladder), state)
+
+    @staticmethod
+    def __unfenced(lines: Sequence[str]) -> Sequence[str]:
+        """The lines below a leading frontmatter block, all of them when there is none."""
+        if not lines or lines[0] != "---":
+            return lines
+        try:
+            return lines[list(lines).index("---", 1) + 1 :]
+        except ValueError:
+            return lines
 
     def __carried(self) -> list[str]:
         """The generated node rows the index on disk already holds, none when it has none."""

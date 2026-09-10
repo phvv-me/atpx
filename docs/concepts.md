@@ -108,6 +108,75 @@ on every host. Claim templates are parsed before `{dir}` expands, keeping a
 workspace path with spaces inside one command argument, and executable lookup
 uses the host's normal `PATH` rules (including `PATHEXT` on Windows).
 
+## The node document
+
+`node.md` carries two contracts in one file. Its frontmatter is an Open
+Knowledge Format catalog entry, and its body is the ledger's own: the statement
+of record, the argument, the evidence section, and the append-only log.
+
+`type` is the format's one required key and says what the node is —
+`experiment`, `theorem`, `conjecture`. The house's older `kind` is read as the
+same key, so a node written before the format still types itself, and `doctor`
+names the nodes carrying neither. That finding reports and never gates, since a
+catalog entry missing its type still reads and the migration to the key is under
+way across ledgers that predate it.
+
+`title`, `description`, `resource`, `tags`, `timestamp`, `generated`, `verified`,
+`sources`, `stale_after`, and `okf_version` are the format's optional keys: read
+as written, carried whole, flagged by nothing. `status` is the one name the two
+formats share without agreeing on it — the format spells it
+draft/stable/deprecated and the ledger spells it with the lifecycle ladder above,
+so nothing here validates one against the other. The remaining keys are the
+graph's own: `depends`, `serves`, `seeds`, `judgments`, `superseded_by`, and
+`aliases`.
+
+### Aliases, the names a node has left
+
+A rename breaks every link written before it, and the links in a ledger are
+written years apart. So a renamed node keeps its old spellings in `aliases`, a
+comma list like every other list key, and the graph resolves them: a link naming
+an alias lands on the node declaring it, in the frontier, in a `brief`, in the
+index edges, and in the dangling-link lint. An alias is a pointer and never a
+second claim — nothing counts it, it earns no index row, and the node keeps its
+own name.
+
+A pointer that resolves two ways resolves to nothing. An alias a blueprint
+already spells, or one two nodes both claim, resolves nowhere and is a `doctor`
+breakage. The separator lint reads a node's own aliases as names of it, so
+renaming `x-structure` to `x_structure` and keeping the old spelling is one node
+under two names rather than the unjoined twins it would otherwise look like.
+
+### Links
+
+Two spellings, one edge. `[[slug]]` is the ledger's, and the ordinary relative
+markdown link is the format's: `[the sibling](../slug/node.md)`,
+`[it](/experiments/slug/node.md)`. Any target whose last two segments are
+`<slug>/node.md` is an edge, and anything else is prose. Both feed the dependency
+walk, the frontier, the brief, and the dangling-link lint alike.
+
+## The index
+
+`atpx index` regenerates the workspace index from node state alone, at the path
+the manifest's `index` setting names. The note is an OKF index: no frontmatter at
+all, with the one exception of a bundle root, which may carry `okf_version` and
+nothing else — declare it as `okf_version` under `[workspace]` and the block is
+written, leave it out and the file carries none.
+
+Its body is one `# Section` per state, ordered down the certification ladder, and
+one bullet per node:
+
+```text
+# Validated
+
+* [The Fused Block Law](fused_block_law/node.md) - Blocks accumulate exactly.
+```
+
+The title is the node's `title` key, its slug when it declares none, and the
+description is its `description` key, its statement's first sentence when it
+declares none. The generated table and the graph JSON beside it stay for the
+readers that already parse them, and hand-authored prose survives under the
+manual section as before.
+
 ## Settling
 
 A node's `status` only moves behind an evidence gate, and each gate checks

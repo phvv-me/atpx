@@ -7,10 +7,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from atpx import Node, NodeStore, Status
+from atpx import Node, NodeStore, Status, Workspace
 from atpx.study import BlankIndexError, LedgerIndex
 
-from ..support import node_text, raced
+from ..support import FakeRunner, node_text, planted, raced
 
 nodes_strategy = st.dictionaries(
     keys=st.from_regex(r"node-[a-z]{1,8}", fullmatch=True),
@@ -216,3 +216,94 @@ def test_the_index_lists_each_node_document_with_its_own_state(tmp_path: Path) -
     text = LedgerIndex(store.path / "INDEX.md").render(store.nodes())
     assert "| [[campaign]] | validated | the v1 campaign |" in text
     assert "| [[campaign/v2]] | refuted | the v2 successor |" in text
+
+
+def noted(directory: Path, text: str) -> Node:
+    """One node written under its own blueprint directory."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "node.md"
+    path.write_text(text)
+    return Node(path)
+
+
+def test_the_okf_body_lists_every_node_as_a_bullet_under_its_state(root: Path) -> None:
+    store = NodeStore(root / "research" / "math")
+    text = LedgerIndex(store.path / "INDEX.md").render(store.nodes())
+    assert "# Open\n\n* [demo](demo/node.md) - A claim using [[dep]]." in text
+    assert text.index("# Open") < text.index("# In progress") < text.index("# Sketched")
+    assert text.index("* [dep](dep/node.md) - Settled.") > text.index("# Sketched")
+
+
+def test_a_bullet_reads_the_okf_title_and_description_keys(tmp_path: Path) -> None:
+    node = noted(
+        tmp_path / "law",
+        node_text(
+            front={"title": "The Fused Block Law", "description": "Blocks accumulate exactly."}
+        ),
+    )
+    bullet = LedgerIndex(tmp_path / "index.md").bullet(node)
+    assert bullet == "* [The Fused Block Law](law/node.md) - Blocks accumulate exactly."
+
+
+def test_a_bullet_falls_back_to_the_slug_and_the_first_sentence(tmp_path: Path) -> None:
+    node = noted(tmp_path / "law", node_text(body="It holds. And more.", refutation=None))
+    assert LedgerIndex(tmp_path / "index.md").bullet(node) == "* [law](law/node.md) - It holds."
+
+
+def test_a_node_that_describes_itself_nowhere_is_a_bare_link(tmp_path: Path) -> None:
+    node = noted(tmp_path / "law", node_text(body="<!-- to write -->", refutation=None))
+    assert LedgerIndex(tmp_path / "index.md").bullet(node) == "* [law](law/node.md)"
+
+
+def test_sections_order_down_the_ladder_and_park_every_other_state_after_it(
+    tmp_path: Path,
+) -> None:
+    nodes = [
+        noted(tmp_path / "settled", node_text(Status.VALIDATED)),
+        noted(tmp_path / "pool", node_text(None, front={"type": "probe-pool"})),
+        noted(tmp_path / "bare", node_text(None)),
+    ]
+    text = LedgerIndex(tmp_path / "index.md").sections(nodes)
+    assert text.index("# Validated") < text.index("# Probe-pool") < text.index("# Unstated")
+
+
+def test_the_bundle_root_carries_the_one_frontmatter_key_the_format_allows(root: Path) -> None:
+    store = NodeStore(root / "research" / "math")
+    index = LedgerIndex(store.path / "INDEX.md", store.path, okf_version="0.2")
+    text = index.write(store.nodes())
+    assert text.startswith('---\nokf_version: "0.2"\n---\n\n# Mathematics Results Index')
+    assert index.stale(store.nodes()) == []
+
+
+def test_the_workspace_declares_which_okf_version_its_index_is_the_root_of(root: Path) -> None:
+    (root / "atpx.toml").write_text('[workspace]\nokf_version = "0.2"\n')
+    assert Workspace(root, runner=FakeRunner()).index().startswith('---\nokf_version: "0.2"\n---')
+
+
+def test_a_hand_authored_index_donates_its_body_but_never_its_frontmatter(
+    tmp_path: Path,
+) -> None:
+    index = LedgerIndex(tmp_path / "index.md", okf_version="0.2")
+    index.path.write_text('---\nokf_version: "0.2"\n---\n\n# Old Index\n\nKept prose.\n')
+    text = index.render([noted(tmp_path / "law", node_text())])
+    assert text.count("okf_version") == 1 and text.startswith("---")
+    assert "Kept prose." in text.partition(LedgerIndex.MANUAL)[2]
+
+
+def test_an_unclosed_leading_fence_is_prose_like_any_other_hand_authored_line(
+    tmp_path: Path,
+) -> None:
+    index = LedgerIndex(tmp_path / "index.md")
+    index.path.write_text("---\n\n# Old Index\n\nKept prose.\n")
+    manual = index.render([noted(tmp_path / "law", node_text())]).partition(LedgerIndex.MANUAL)[2]
+    assert "Kept prose." in manual and manual.strip().startswith("---")
+
+
+def test_an_edge_naming_a_name_the_node_has_left_resolves_to_the_node_of_record(
+    tmp_path: Path,
+) -> None:
+    store = NodeStore(tmp_path / "math")
+    planted(store.path, "renamed", text=node_text(front={"aliases": "[old-name]"}))
+    planted(store.path, "reader", text=node_text(front={"depends": "[old-name]"}))
+    graph = LedgerIndex(store.path / "INDEX.md").graph(store.nodes())
+    assert graph["edges"] == [{"from": "reader", "to": "renamed"}]

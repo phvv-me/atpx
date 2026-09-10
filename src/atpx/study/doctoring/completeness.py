@@ -6,6 +6,7 @@ from pydantic import JsonValue
 
 from ...briefing.judgments.ledger import JudgmentLedger
 from ...briefing.judgments.rulings import RulingLedger
+from ...graph.aliasing import Aliases
 from ...graph.category import Category
 from ...graph.node import Node, statement_of
 from ...graph.status import Status
@@ -38,12 +39,24 @@ class CompletenessLints:
             "contradicted_results": self.contradicted_results(),
             "dangling_links": self.dangling(),
             "unjoined_twins": self.unjoined_twins(),
+            "colliding_aliases": self.colliding_aliases(),
             "frontmatter_problems": self.frontmatter_problems(),
             "unstated_nodes": self.unstated(),
             "unconditioned_nodes": self.unconditioned(),
             "unjudged_sketches": self.unjudged_sketches(),
             "drifted_statements": self.drifted(),
+            "untyped_nodes": self.untyped(),
         }
+
+    def colliding_aliases(self) -> dict[str, JsonValue]:
+        """Declared aliases that resolve two ways, mapped to what each one collides with.
+
+        An alias is a pointer, so it earns its keep only while it names exactly one node.
+        One that a blueprint already spells, or that two nodes both claim, resolves to
+        nothing at all rather than to whichever node was read first, and a link written
+        under it lands nowhere.
+        """
+        return dict[str, JsonValue](Aliases(self.nodes.nodes()).collisions())
 
     def contradicted_results(self) -> dict[str, JsonValue]:
         """Nodes whose frontmatter status disagrees with the verdict their result note declares.
@@ -138,15 +151,21 @@ class CompletenessLints:
         does not: a reader following a link, and a results table citing one of them,
         both end up at whichever half nobody is maintaining. Any typed relation joins
         the pair, so this fires only on twins that were never related at all.
+
+        A node's own aliases are read as names of it here, since that is what they are
+        to a link. A rename that keeps the old spelling as an alias is therefore one
+        node under two names rather than a twin, and says so mechanically.
         """
-        twins: dict[str, list[Node]] = {}
-        for node in self.nodes.nodes():
-            twins.setdefault(node.name.replace("-", "_"), []).append(node)
+        nodes = self.nodes.nodes()
+        twins: dict[str, dict[str, Node]] = {}
+        for node in nodes:
+            for name in (node.name, *node.aliases):
+                twins.setdefault(name.replace("-", "_"), {})[node.name] = node
         return {
-            ", ".join(node.name for node in pair): "two names for one separator, "
+            ", ".join(sorted(pair)): "two names for one separator, "
             "with no relation joining them; point one at the other or rename it"
             for pair in twins.values()
-            if len(pair) > 1 and not self.__joined(pair)
+            if len(pair) > 1 and not self.__joined(list(pair.values()))
         }
 
     def unjudged_sketches(self) -> dict[str, JsonValue]:
@@ -180,6 +199,15 @@ class CompletenessLints:
             for node in self.nodes.canonical()
             if node.front.category is not Category.PROBE_POOL and not node.stated
         ]
+
+    def untyped(self) -> list[JsonValue]:
+        """Nodes declaring neither `type` nor the older `kind` it is now spelled with.
+
+        `type` is the Open Knowledge Format's one required key and the ledger's own way
+        of telling a claim from a probe pool, so a node without it is a catalog entry
+        that says nothing about what it is.
+        """
+        return [node.name for node in self.nodes.nodes() if node.front.type is None]
 
     @staticmethod
     def __joined(pair: Sequence[Node]) -> bool:

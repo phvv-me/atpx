@@ -20,14 +20,17 @@ class DoctorReport:
     in two, and `breakages` names which half a finding falls in. A breakage contradicts
     what the workspace itself asserts or leaves a node below the completeness contract:
     a status outside the lifecycle ladder, a status its own result note contradicts, a
-    wikilink pointing at nothing, two names for one claim with nothing joining them, a
+    link pointing at nothing, two names for one claim with nothing joining them, an alias
+    that resolves two ways, a
     claim whose newest evidence failed, never ran, or predates the node statement it
     supports, frontmatter that does not parse, a node without a statement of record or a
     refutation condition, a sketched node whose linked judgment is missing or names no
     attacking rung, a statement that drifted from its judgment snapshot, a settled node
     the results table carries no row for, or an index a regeneration would change.
-    Everything else is untidiness the capture-first posture deliberately tolerates,
-    reported so it can be cleaned up but never a gate.
+    A node declaring no `type` is reported and not gated, since the format migration
+    that introduced the key is under way across ledgers that predate it and a catalog
+    entry missing it still reads. Everything else is untidiness the capture-first
+    posture deliberately tolerates, reported so it can be cleaned up but never a gate.
     """
 
     BREAKING: ClassVar[tuple[str, ...]] = (
@@ -35,6 +38,7 @@ class DoctorReport:
         "contradicted_results",
         "dangling_links",
         "unjoined_twins",
+        "colliding_aliases",
         "failing_claims",
         "unevidenced_claims",
         "stale_claims",

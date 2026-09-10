@@ -36,10 +36,19 @@ class Briefing:
         self.revision = revision
 
     def dependencies(self) -> str:
-        """One line per blueprint dependency with its status, from the wikilink walk."""
-        nodes = {node.name: node for node in self.nodes.nodes()}
+        """One line per blueprint dependency with its status, from the link walk.
+
+        Links resolve through the graph's aliases, so a dependency written under a name
+        the node has since left still reports a status, named at the node of record.
+        """
+        nodes = self.nodes.resolved()
         links = [name for name in self.node.links if name in nodes and name != self.node.name]
-        lines = [f"- [[{name}]] is {nodes[name].status}" for name in links]
+        lines = [
+            f"- [[{name}]] is {nodes[name].status}"
+            if nodes[name].name == name
+            else f"- [[{name}]] is {nodes[name].status}, recorded under [[{nodes[name].name}]]"
+            for name in links
+        ]
         return "\n".join(lines) or "No blueprint dependencies."
 
     def evidence(self) -> str:

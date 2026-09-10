@@ -10,7 +10,7 @@ _SPEC = "claim-spec.md"
 _NODE_TEMPLATE = """\
 ---
 status: open
-kind: {kind}
+type: {kind}
 date: {date}
 references: []
 ---
@@ -65,10 +65,10 @@ class Scaffold:
     def open(self, slug: str, kind: Kind) -> Path:
         """Create the blueprint skeleton for `slug`, refusing an existing node.
 
-        The node opens with status `open` and its kind stamped in the
-        frontmatter; the claim-spec template carries the mandatory feasibility
-        check block the prover reads. An existing manifest or spec is kept,
-        an existing `node.md` is never overwritten.
+        The node opens with status `open` and its kind stamped in the frontmatter
+        as `type`, the Open Knowledge Format's one required key; the claim-spec
+        template carries the mandatory feasibility check block the prover reads. An
+        existing manifest or spec is kept, an existing `node.md` is never overwritten.
 
         slug: the blueprint directory name, a single path segment.
         kind: the node kind stamped in the frontmatter.

@@ -110,7 +110,7 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
         """
         configured = self.config.get("index")
         path = self.root / str(configured) if configured else self.nodes.path / "INDEX.md"
-        return LedgerIndex(path, *self.blueprints)
+        return LedgerIndex(path, *self.blueprints, okf_version=self.okf_version)
 
     @cached_property
     def manifest(self) -> Mapping[str, Mapping[str, JsonValue]]:
@@ -121,6 +121,16 @@ class Workspace(CheckVerbs, StudyVerbs, CounselVerbs):
     def nodes(self) -> NodeStore:
         """The blueprint node graph."""
         return NodeStore(*self.blueprints)
+
+    @cached_property
+    def okf_version(self) -> str:
+        """The Open Knowledge Format version this workspace's index is the bundle root of.
+
+        Declared as `okf_version` under `[workspace]` and empty by default: a workspace
+        that says nothing writes an index with no frontmatter at all, which is what the
+        format asks of every index but its bundle root.
+        """
+        return str(self.config.get("okf_version", ""))
 
     @cached_property
     def results_ledger(self) -> ResultsLedger:

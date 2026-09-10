@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from pathlib import Path
 
+from .aliasing import Aliases
 from .node import Node
 from .status import Status
 
@@ -60,11 +61,15 @@ class NodeStore:
     def find(self, slug: str) -> Node:
         """The node of blueprint `slug`, raising with the known slugs on a miss.
 
+        A name no blueprint carries is tried against the declared aliases, so a verb
+        called with a node's former spelling still lands on the node itself.
+
         slug: the blueprint directory name a wikilink would use.
         """
+        nodes = self.nodes()
         found = next(
-            (node for node in self.nodes() if node.name == slug),
-            None,
+            (node for node in nodes if node.name == slug),
+            Aliases(nodes).resolved().get(slug),
         )
         if found is None:
             raise KeyError(
@@ -102,13 +107,15 @@ class NodeStore:
         return [found[name] for name in sorted(found)]
 
     def reach(self) -> set[str]:
-        """Every pointer this store answers: blueprint names, root-qualified names, node names.
+        """Every pointer this store answers: blueprint names, root-qualified names, node
+        names, and the aliases the nodes declare.
 
         Read whole rather than one pointer at a time, because the caller is the dangling
         lint asking about every wikilink in the workspace at once and resolving each one
         on its own would reopen every node file per link.
         """
-        found = {node.name for node in self.nodes()}
+        nodes = self.nodes()
+        found = {node.name for node in nodes} | set(Aliases(nodes).resolved())
         for root in self.roots:
             found |= {
                 f"{qualifier}{directory.name}"
@@ -134,17 +141,18 @@ class NodeStore:
     def resolved(self) -> dict[str, Node]:
         """Every node keyed by each slug that reaches it, an alias keyed to its canonical.
 
-        A superseded slug resolves to the node of record its pointer names, so a
-        wikilink written before a migration still lands on the claim it meant, and a
-        canonical node always wins its own name.
+        A superseded slug resolves to the node of record its pointer names and a declared
+        alias to the node declaring it, so a wikilink written before a migration or a
+        rename still lands on the claim it meant, and a canonical node always wins its
+        own name.
         """
         canonical = {node.name: node for node in self.canonical()}
-        aliases = {
+        moved = {
             slug: canonical[target]
             for slug, pointer in self.aliases().items()
             if (target := pointer.rpartition("/")[2]) in canonical
         }
-        return aliases | canonical
+        return Aliases(canonical.values()).resolved() | moved | canonical
 
     def statuses(self) -> dict[str, list[str]]:
         """Node names grouped by status, ordered down the certification ladder.

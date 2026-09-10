@@ -4,7 +4,7 @@ import pytest
 
 from atpx import NodeStore
 
-from ..support import node_text
+from ..support import node_text, planted
 
 
 def test_store_statuses_and_frontier(root: Path) -> None:
@@ -87,3 +87,36 @@ def test_a_second_node_document_is_reached_by_its_own_name(root: Path) -> None:
     assert "campaign/v2" in store.reach()
     assert store.find("campaign/v2").path == directory / "v2-node.md"
     assert store.resolve("campaign/v2") == directory
+
+
+def test_an_alias_resolves_a_link_written_before_the_rename(root: Path) -> None:
+    """A rename keeps its old spelling in `aliases`, and every reader follows it."""
+    blueprints = root / "research" / "math"
+    planted(
+        blueprints,
+        "renamed",
+        text=node_text("sketched", title="Renamed", front={"aliases": "[old-name]"}),
+    )
+    planted(
+        blueprints,
+        "reader",
+        text=node_text("open", title="Reader", body="Leans on [[old-name]]."),
+    )
+    store = NodeStore(blueprints)
+    assert store.find("old-name").name == "renamed"
+    assert "old-name" in store.reach()
+    assert store.resolved()["old-name"].name == "renamed"
+    frontier = {str(row["node"]): row["deps"] for row in store.frontier()}
+    assert frontier["reader"] == {"old-name": "sketched"}
+
+
+def test_an_alias_that_resolves_two_ways_resolves_to_neither(root: Path) -> None:
+    blueprints = root / "research" / "math"
+    planted(blueprints, "first", text=node_text(front={"aliases": "[shared]"}))
+    planted(blueprints, "second", text=node_text(front={"aliases": "[shared]"}))
+    planted(blueprints, "shadowing", text=node_text(front={"aliases": "[demo]"}))
+    store = NodeStore(blueprints)
+    assert "shared" not in store.resolved()
+    assert store.resolved()["demo"].name == "demo"
+    with pytest.raises(KeyError, match="no node named 'shared'"):
+        store.find("shared")

@@ -28,7 +28,7 @@ def test_parse_reads_the_contract_fields(depends: list[str], seeds: list[int]) -
     node = written(
         node_text(
             front={
-                "kind": "conjecture",
+                "type": "conjecture",
                 "depends": f"[{', '.join(depends)}]",
                 "serves": "[papers/iclr-2027]",
                 "seeds": f"[{', '.join(map(str, seeds))}]",
@@ -37,11 +37,57 @@ def test_parse_reads_the_contract_fields(depends: list[str], seeds: list[int]) -
         )
     )
     front = node.front
-    assert front.status == "open" and front.kind == "conjecture"
+    assert front.status == "open" and front.type == "conjecture"
     assert front.depends == depends and front.seeds == seeds
     assert front.serves == ["papers/iclr-2027"]
     assert front.judgments == ["judgments/draft.md"]
     assert front.problems == [] and front.present
+
+
+def test_the_okf_catalog_keys_are_read_whole_and_flagged_by_nothing() -> None:
+    front = written(
+        node_text(
+            front={
+                "type": "experiment",
+                "title": "The Fused Block Law",
+                "description": "Blocks accumulate exactly.",
+                "resource": "probes/law.py",
+                "tags": "[determinism, gemm]",
+                "timestamp": "2026-09-10T12:00:00Z",
+                "generated": "{by: mainboard, at: 2026-09-10}",
+                "verified": "{by: pedro}",
+                "sources": "[arxiv:2509.00001]",
+                "stale_after": "2027-01-01",
+                "okf_version": "0.2",
+            }
+        )
+    ).front
+    assert front.type == "experiment" and front.title == "The Fused Block Law"
+    assert front.description == "Blocks accumulate exactly." and front.resource == "probes/law.py"
+    assert front.tags == ["determinism", "gemm"] and front.sources == ["arxiv:2509.00001"]
+    assert front.generated == "{by: mainboard, at: 2026-09-10}"
+    assert front.verified == "{by: pedro}" and front.stale_after == "2027-01-01"
+    assert front.okf_version == "0.2" and front.problems == []
+
+
+def test_the_ledger_status_vocabulary_is_never_validated_against_the_format() -> None:
+    """OKF spells a status draft/stable/deprecated; the ladder here is the one that governs."""
+    front = written(node_text("registered")).front
+    assert front.status == "registered" and front.problems == []
+
+
+def test_a_timestamp_that_is_not_iso_8601_is_a_problem_not_a_crash() -> None:
+    front = written(node_text(front={"timestamp": "last tuesday"})).front
+    assert front.timestamp == "last tuesday"
+    assert front.problems == ["timestamp 'last tuesday' is not ISO 8601"]
+
+
+def test_aliases_read_as_slugs_and_an_unslug_like_one_is_named() -> None:
+    front = written(node_text(front={"aliases": "[old-name, older_name]"})).front
+    assert front.aliases == ["old-name", "older_name"] and front.problems == []
+    broken = written(node_text(front={"aliases": "[not a slug]"})).front
+    assert broken.aliases == []
+    assert broken.problems == ["aliases entry 'not a slug' is not a plausible slug"]
 
 
 def test_a_seed_that_is_not_an_integer_is_a_problem_not_a_crash() -> None:
@@ -63,11 +109,16 @@ def test_a_missing_block_is_a_problem_not_a_crash() -> None:
     assert front.status is None and front.depends == []
 
 
-def test_category_derives_from_the_kind() -> None:
-    assert Frontmatter(kind="probe-pool").category is Category.PROBE_POOL
-    assert Frontmatter(kind="convention").category is Category.CONVENTION
-    assert Frontmatter(kind="theorem").category is Category.CLAIM
+def test_category_derives_from_the_type() -> None:
+    assert Frontmatter(type="probe-pool").category is Category.PROBE_POOL
+    assert Frontmatter(type="convention").category is Category.CONVENTION
+    assert Frontmatter(type="theorem").category is Category.CLAIM
     assert Frontmatter().category is Category.CLAIM
+
+
+def test_the_legacy_kind_key_is_read_as_the_okf_type() -> None:
+    assert written(node_text(front={"kind": "probe-pool"})).front.type == "probe-pool"
+    assert written(node_text(front={"kind": "lemma", "type": "theorem"})).front.type == "theorem"
 
 
 @given(items=slug_lists, spelling=st.sampled_from(_NULL_SPELLINGS))

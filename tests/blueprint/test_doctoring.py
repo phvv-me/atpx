@@ -217,3 +217,61 @@ def test_a_relation_joins_a_pair_of_names_however_it_spells_the_pointer(root: Pa
     )
     planted(root / _MATH, "x_structure", text=node_text("open", title="X structure"))
     assert reported(Workspace(root, runner=FakeRunner()))["."]["unjoined_twins"] == {}
+
+
+def test_doctor_flags_an_alias_that_resolves_two_ways(root: Path) -> None:
+    """An alias earns its keep only while it names exactly one node."""
+    planted(root / _MATH, "shadowing", text=node_text(front={"aliases": "[demo]"}))
+    planted(root / _MATH, "twin-a", text=node_text(front={"aliases": "[shared]"}))
+    planted(root / _MATH, "twin-b", text=node_text(front={"aliases": "[shared]"}))
+    certificate = Workspace(root, runner=FakeRunner()).doctor()
+    report = result_of(certificate)["workspaces"]["."]
+    assert report["colliding_aliases"] == {
+        "demo": "demo is already a node of its own",
+        "shared": "twin-a, twin-b both declare it",
+    }
+    assert ".: colliding_aliases" in result_of(certificate)["breakages"]
+
+
+def test_a_rename_that_keeps_its_old_spelling_is_one_node_and_not_a_twin(root: Path) -> None:
+    planted(
+        root / _MATH,
+        "x_structure",
+        text=node_text("open", title="X structure", front={"aliases": "[x-structure]"}),
+    )
+    report = reported(Workspace(root, runner=FakeRunner()))["."]
+    assert report["unjoined_twins"] == {} and report["colliding_aliases"] == {}
+
+
+def test_an_alias_twinning_another_node_is_a_finding_all_the_same(root: Path) -> None:
+    planted(root / _MATH, "y_thing", text=node_text("open", title="Y thing"))
+    planted(
+        root / _MATH,
+        "keeper",
+        text=node_text("open", title="Keeper", front={"aliases": "[y-thing]"}),
+    )
+    assert reported(Workspace(root, runner=FakeRunner()))["."]["unjoined_twins"] == {
+        "keeper, y_thing": "two names for one separator, with no relation joining "
+        "them; point one at the other or rename it"
+    }
+
+
+def test_doctor_names_a_node_that_declares_no_type_without_gating_on_it(root: Path) -> None:
+    """`type` is the format's one required key, and the migration to it is still under way."""
+    planted(root / _MATH, "typed", text=node_text(front={"type": "experiment"}))
+    planted(root / _MATH, "legacy", text=node_text(front={"kind": "theorem"}))
+    certificate = Workspace(root, runner=FakeRunner()).doctor()
+    untyped = result_of(certificate)["workspaces"]["."]["untyped_nodes"]
+    assert "demo" in untyped and "typed" not in untyped and "legacy" not in untyped
+    assert ".: untyped_nodes" not in result_of(certificate)["breakages"]
+
+
+def test_a_markdown_link_to_a_missing_node_dangles_like_a_wikilink(root: Path) -> None:
+    planted(
+        root / _MATH,
+        "linker",
+        text=node_text("open", title="Linker", body="Leans on [the ghost](../ghost/node.md)."),
+    )
+    assert reported(Workspace(root, runner=FakeRunner()))["."]["dangling_links"] == {
+        "linker": ["ghost"]
+    }

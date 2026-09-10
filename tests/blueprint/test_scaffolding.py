@@ -14,7 +14,7 @@ def test_open_scaffolds_a_readable_node(space: Workspace) -> None:
     assert reported == "research/math/locking-kernel/node.md"
     node = space.nodes.find("locking-kernel")
     assert node.status is Status.OPEN
-    assert node.frontmatter["kind"] == "theorem"
+    assert node.frontmatter["type"] == "theorem"
     assert node.frontmatter["date"] == datetime.now(UTC).date().isoformat()
     assert node.frontmatter["references"] == "[]"
 

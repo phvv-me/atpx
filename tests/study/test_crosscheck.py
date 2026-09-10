@@ -71,3 +71,11 @@ def test_a_family_no_device_contradicts_passes(root: Path) -> None:
         "Linux-aarch64": ["demo/ok"],
         "Linux-x86_64": ["demo/gpu"],
     }
+
+
+def test_a_second_certificate_at_the_same_instant_never_displaces_the_first(root: Path) -> None:
+    """Newest wins, and same-instant is not newer, so a replay cannot rewrite a verdict."""
+    measured(root, "demo/ok", device="Linux-x86_64", exit_status=1)
+    measured(root, "demo/ok", device="Linux-x86_64")
+    comparison = DeviceComparison(Workspace(root, runner=FakeRunner()).nodes, "demo")
+    assert comparison.table().endswith("| demo/ok | failed |")
