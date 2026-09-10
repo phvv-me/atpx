@@ -87,8 +87,14 @@ class LedgerIndex:
         return node.summary or node.headline
 
     def described(self, node: Node) -> str:
-        """One node's index description: its OKF `description`, else its first sentence."""
-        return node.front.description or node.sentence
+        """One node's index description: its OKF `description`, else its first sentence.
+
+        A description that only repeats the title says nothing the link does not.
+        """
+        description = node.front.description or node.sentence
+        if description.rstrip(".").casefold() == self.titled(node).casefold():
+            return ""
+        return description
 
     def graph(self, nodes: Sequence[Node]) -> dict[str, list[dict[str, str]]]:
         """The blueprint-shaped graph: nodes with slug, root, state, and claim; edges from depends.

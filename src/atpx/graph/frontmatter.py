@@ -29,8 +29,18 @@ def fields(text: str) -> dict[str, str] | None:
             break
         key, separator, value = line.partition(": ")
         if separator:
-            found[key.strip()] = value.strip()
+            found[key.strip()] = _unquoted(value.strip())
     return found
+
+
+def _unquoted(value: str) -> str:
+    """A YAML scalar with its surrounding quotes and their escapes removed, else as written."""
+    if len(value) < 2 or value[0] != value[-1] or value[0] not in "\"'":
+        return value
+    inner = value[1:-1]
+    if value[0] == "'":
+        return inner.replace("''", "'")
+    return inner.replace('\\"', '"').replace("\\\\", "\\")
 
 
 def split_slugs(raw: str) -> tuple[list[str], list[str]]:
@@ -116,7 +126,7 @@ class Frontmatter(FrozenModel):
     @property
     def category(self) -> Category:
         """The node's category, `claim` for every type that is not a special one."""
-        normalized = (self.type or "").replace("-", "_")
+        normalized = (self.type or "").casefold().replace("-", "_").replace(" ", "_")
         try:
             return Category(normalized)
         except ValueError:
