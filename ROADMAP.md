@@ -11,7 +11,7 @@ each milestone needs. It is a direction, not a contract, so order and scope can 
       transitions, the dependency frontier, index regeneration, and the engine
       registry with cross-engine certification.
 - [x] Stage 2, recall. The `recall` verb federates one query across read-only
-      `search` engines, vault (qmd BM25), OEIS, loogle, arXiv, and zbMATH Open,
+      `search` engines, vault (BM25), OEIS, loogle, arXiv, and zbMATH Open,
       into a single certificate of hits per source with per-source error
       accounting. Blueprint claims grew an optional `requires` marker, so
       GPU-only evidence skips gracefully on hosts without CUDA, and every
