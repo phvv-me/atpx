@@ -307,3 +307,12 @@ def test_an_edge_naming_a_name_the_node_has_left_resolves_to_the_node_of_record(
     planted(store.path, "reader", text=node_text(front={"depends": "[old-name]"}))
     graph = LedgerIndex(store.path / "INDEX.md").graph(store.nodes())
     assert graph["edges"] == [{"from": "reader", "to": "renamed"}]
+
+
+def test_a_description_that_only_repeats_the_title_is_dropped(tmp_path: Path) -> None:
+    node = noted(
+        tmp_path / "law",
+        node_text(front={"title": "The Fused Block Law", "description": "The fused block law."}),
+    )
+    bullet = LedgerIndex(tmp_path / "index.md").bullet(node)
+    assert bullet == "* [The Fused Block Law](law/node.md)"

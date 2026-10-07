@@ -167,3 +167,11 @@ def test_a_relation_only_key_reports_a_null_spelling_though_it_stores_no_field()
 def test_a_relation_only_key_reports_an_implausible_value() -> None:
     front = written(node_text(front={"shadows": "width-law, not real"})).front
     assert front.problems == ["shadows entry 'not real' is not a plausible slug"]
+
+
+def test_quoted_scalars_lose_their_quotes_and_escapes() -> None:
+    node = written(
+        node_text(front={"title": "'It''s exact'", "description": '"A \\"fused\\" block"'})
+    )
+    assert node.front.title == "It's exact"
+    assert node.front.description == 'A "fused" block'

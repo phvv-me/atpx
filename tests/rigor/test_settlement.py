@@ -135,9 +135,10 @@ def test_validated_refuses_a_dirty_exit(space: Workspace) -> None:
 
 
 def test_the_demand_walks_past_a_ledger_without_the_match(space: Workspace) -> None:
+    # Hosts read in sorted order; `0` sorts before any hostname, capitals included.
     directory = space.nodes.directory("demo")
-    foreign = stamped("demo/other").model_copy(update={"hostname": "aaa-first"})
-    EvidenceStore(directory, hostname="aaa-first").append(foreign)
+    foreign = stamped("demo/other").model_copy(update={"hostname": "0-first"})
+    EvidenceStore(directory, hostname="0-first").append(foreign)
     EvidenceStore(directory).append(stamped("demo/kill", exit_status=1))
     space.settle("demo", "refuted", "dead.", counterexample="kill")
     assert space.nodes.find("demo").status is Status.REFUTED
